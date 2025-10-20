@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +35,29 @@ export function IntakeFormEditor({
   const [damages, setDamages] = useState<Damages>(initialData.damages);
   const [isSaving, setIsSaving] = useState(false);
   const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Track changes
+  useEffect(() => {
+    const isDirty =
+      caseType !== initialData.caseType ||
+      JSON.stringify(liability) !== JSON.stringify(initialData.liability) ||
+      JSON.stringify(damages) !== JSON.stringify(initialData.damages);
+    setHasUnsavedChanges(isDirty);
+  }, [caseType, liability, damages, initialData]);
+
+  // Warn on page unload
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [hasUnsavedChanges]);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -44,6 +67,7 @@ export function IntakeFormEditor({
         liability,
         damages,
       });
+      setHasUnsavedChanges(false);
     } finally {
       setIsSaving(false);
     }
@@ -76,10 +100,24 @@ export function IntakeFormEditor({
   };
 
   return (
-    <div className="bg-white rounded-md border p-4 space-y-4">
+    <div
+      className="bg-white rounded-md border p-4 space-y-4"
+      data-unsaved-changes={hasUnsavedChanges}
+    >
       <div className="flex items-center justify-between border-b pb-3">
-        <h2 className="text-sm font-semibold">Intake Form</h2>
-        <Button onClick={handleSave} disabled={isSaving} size="sm">
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-semibold">Intake Form</h2>
+          {hasUnsavedChanges && (
+            <span className="text-xs text-orange-600 font-medium">
+              (Unsaved changes)
+            </span>
+          )}
+        </div>
+        <Button
+          onClick={handleSave}
+          disabled={isSaving || !hasUnsavedChanges}
+          size="sm"
+        >
           {isSaving ? "Saving..." : "Save"}
         </Button>
       </div>
@@ -209,6 +247,7 @@ export function IntakeFormEditor({
             <div className="space-y-2">
               {damages.indications.map((indication, index) => (
                 <div
+                  // biome-ignore lint/suspicious/noArrayIndexKey: <explanation>
                   key={index}
                   className="border rounded p-2 space-y-2 bg-gray-50"
                 >
