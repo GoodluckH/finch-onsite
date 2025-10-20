@@ -158,6 +158,7 @@ export async function updateMatter(
     clientAddress?: string;
     incidentDate?: string;
     incidentLocation?: string;
+    brief?: string;
   }
 ) {
   await db.update(matters).set(data).where(eq(matters.id, id));

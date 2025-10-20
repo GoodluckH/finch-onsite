@@ -72,7 +72,6 @@ export function TranscriptViewer({ transcript }: TranscriptViewerProps) {
                 >
                   Speaker {segment.speaker}
                 </span>
-                <span className="text-xs text-gray-400">Turn {index + 1}</span>
               </div>
 
               {/* Content */}

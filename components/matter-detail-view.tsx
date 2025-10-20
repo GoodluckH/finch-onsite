@@ -21,6 +21,7 @@ type Matter = {
   clientAddress?: string | null;
   incidentDate?: string | null;
   incidentLocation?: string | null;
+  brief?: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -52,6 +53,7 @@ export function MatterDetailView({
   const [clientAddress, setClientAddress] = useState(matter.clientAddress || "");
   const [incidentDate, setIncidentDate] = useState(matter.incidentDate || "");
   const [incidentLocation, setIncidentLocation] = useState(matter.incidentLocation || "");
+  const [brief, setBrief] = useState(matter.brief || "");
 
   // Intake form data state
   const [caseType, setCaseType] = useState(initialIntakeData.caseType);
@@ -93,6 +95,7 @@ export function MatterDetailView({
     setClientAddress(matter.clientAddress || "");
     setIncidentDate(matter.incidentDate || "");
     setIncidentLocation(matter.incidentLocation || "");
+    setBrief(matter.brief || "");
     setCaseType(initialIntakeData.caseType);
     setLiability(initialIntakeData.liability);
     setDamages(initialIntakeData.damages);
@@ -112,6 +115,7 @@ export function MatterDetailView({
         clientAddress,
         incidentDate,
         incidentLocation,
+        brief,
       });
 
       // Update intake form data
@@ -271,6 +275,38 @@ export function MatterDetailView({
         </div>
       </div>
 
+      {/* Case Brief Card */}
+      {brief && !isEditing && (
+        <div className="bg-blue-50 border border-blue-200 rounded-md">
+          <div className="border-b border-blue-200 px-4 py-2 bg-blue-100">
+            <h2 className="text-sm font-semibold text-blue-900">AI Case Brief</h2>
+          </div>
+          <div className="p-4">
+            <p className="text-sm text-gray-800 leading-relaxed">{brief}</p>
+          </div>
+        </div>
+      )}
+
+      {isEditing && (
+        <div className="bg-white rounded-md border">
+          <div className="border-b px-4 py-2">
+            <h2 className="text-sm font-semibold">Case Brief</h2>
+          </div>
+          <div className="p-4">
+            <Label className="text-xs text-gray-600 mb-1">AI-Generated Summary (5 sentences max)</Label>
+            <Textarea
+              value={brief}
+              onChange={(e) => {
+                setBrief(e.target.value);
+                markAsChanged();
+              }}
+              placeholder="AI will generate a concise case summary here..."
+              className="min-h-[100px] text-sm"
+            />
+          </div>
+        </div>
+      )}
+
       {/* Incident Details Card */}
       <div className="bg-white rounded-md border">
         <div className="border-b px-4 py-2">
@@ -326,17 +362,82 @@ export function MatterDetailView({
           {/* Liability Section */}
           <Section title="Liability">
             {isEditing ? (
-              <div className="space-y-2">
-                <Label className="text-xs">Liability Content (Markdown)</Label>
-                <Textarea
-                  value={liability.content}
-                  onChange={(e) => {
-                    setLiability({ ...liability, content: e.target.value });
-                    markAsChanged();
-                  }}
-                  placeholder="Enter liability information (supports markdown)"
-                  className="min-h-[120px] text-sm"
-                />
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs">Who is At Fault?</Label>
+                  <select
+                    value={liability.atFault}
+                    onChange={(e) => {
+                      setLiability({ ...liability, atFault: e.target.value as any });
+                      markAsChanged();
+                    }}
+                    className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+                  >
+                    <option value="other_party">Other Party</option>
+                    <option value="client">Client</option>
+                    <option value="shared">Shared Fault</option>
+                    <option value="unclear">Unclear</option>
+                  </select>
+                </div>
+
+                {liability.atFault === "shared" && (
+                  <div className="grid grid-cols-2 gap-2 p-3 bg-yellow-50 border border-yellow-200 rounded">
+                    <div>
+                      <Label className="text-xs">Client Fault %</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={liability.faultPercentages?.client || 0}
+                        onChange={(e) => {
+                          setLiability({
+                            ...liability,
+                            faultPercentages: {
+                              client: parseInt(e.target.value) || 0,
+                              otherParty: liability.faultPercentages?.otherParty || 0,
+                            },
+                          });
+                          markAsChanged();
+                        }}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Other Party Fault %</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={liability.faultPercentages?.otherParty || 0}
+                        onChange={(e) => {
+                          setLiability({
+                            ...liability,
+                            faultPercentages: {
+                              client: liability.faultPercentages?.client || 0,
+                              otherParty: parseInt(e.target.value) || 0,
+                            },
+                          });
+                          markAsChanged();
+                        }}
+                        className="h-8 text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-xs">Rationale (Markdown)</Label>
+                  <Textarea
+                    value={liability.rationale}
+                    onChange={(e) => {
+                      setLiability({ ...liability, rationale: e.target.value });
+                      markAsChanged();
+                    }}
+                    placeholder="Enter bulleted list justifying fault determination..."
+                    className="min-h-[120px] text-sm"
+                  />
+                </div>
+
                 <div className="flex items-center gap-2">
                   <Label htmlFor="hasPoliceReport" className="text-xs">
                     Police Report:
@@ -356,21 +457,47 @@ export function MatterDetailView({
               </div>
             ) : (
               <>
-                {liability.content ? (
-                  <div className="prose prose-sm max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {liability.content}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <EmptyState text="No liability information provided" />
-                )}
-                <div className="mt-3 pt-3 border-t">
+                <div className="space-y-3">
                   <DataField
-                    label="Police Report"
-                    value={liability.hasPoliceReport ? "Yes" : "No"}
+                    label="At Fault"
+                    value={
+                      liability.atFault === "other_party"
+                        ? "Other Party"
+                        : liability.atFault === "client"
+                          ? "Client"
+                          : liability.atFault === "shared"
+                            ? "Shared Fault"
+                            : "Unclear"
+                    }
                     inline
                   />
+
+                  {liability.atFault === "shared" && liability.faultPercentages && (
+                    <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                      <span className="font-medium">Fault Distribution:</span> Client {liability.faultPercentages.client}% / Other Party {liability.faultPercentages.otherParty}%
+                    </div>
+                  )}
+
+                  {liability.rationale ? (
+                    <div>
+                      <p className="text-xs font-medium text-gray-700 mb-2">Rationale:</p>
+                      <div className="prose prose-sm max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {liability.rationale}
+                        </ReactMarkdown>
+                      </div>
+                    </div>
+                  ) : (
+                    <EmptyState text="No rationale provided" />
+                  )}
+
+                  <div className="pt-3 border-t">
+                    <DataField
+                      label="Police Report"
+                      value={liability.hasPoliceReport ? "Yes" : "No"}
+                      inline
+                    />
+                  </div>
                 </div>
               </>
             )}
