@@ -12,32 +12,45 @@ Output valid JSON matching this schema:
   clientEmail (string|null),
   clientAddress (string|null),
   incidentDate (string|null in YYYY-MM-DD format),
-  incidentLocation (string|null)
+  incidentLocation (string|null),
+  brief (string|null - AI-generated case summary, 5 sentences max)
 }
 
 Rules:
 - Use null for unknown/unmentioned fields
 - Dates must be YYYY-MM-DD format
 - Extract only CLIENT information, not lawyer details
-- Case type must be one of: dog_bites, mva, slip_and_fall`;
+- Case type must be one of: dog_bites, mva, slip_and_fall
+- brief: Generate a concise 5-sentence summary of the case covering: what happened, when, where, injuries/damages, and potential fault`;
 
 export const LIABILITY_SYSTEM_PROMPT = `You are a legal intake assistant extracting LIABILITY INFORMATION from conversation transcripts.
 
 The transcript contains multiple speakers. Infer from context which is the lawyer and which is the client.
-Extract liability-related facts about the incident.
+Extract liability-related facts and determine fault.
 
 Output valid JSON matching this schema:
 {
-  content: string (markdown bulleted list),
+  atFault: "client" | "other_party" | "shared" | "unclear",
+  faultPercentages: { client: number (0-100), otherParty: number (0-100) } (required if atFault === "shared"),
+  rationale: string (markdown bulleted list justifying fault determination),
   hasPoliceReport: boolean,
   evidence: array (optional)
 }
 
 Rules:
-- content: markdown bulleted list of liability facts from client's perspective
-- Include facts about what happened, who was at fault, circumstances, etc.
-- hasPoliceReport: true if police report mentioned, false otherwise
-- Extract only facts relevant to liability/fault determination`;
+- atFault: Determine who is at fault based on the facts
+  - "client": Client is at fault
+  - "other_party": Other party is at fault
+  - "shared": Both parties share fault (must provide faultPercentages)
+  - "unclear": Cannot determine fault from available information
+- faultPercentages: REQUIRED if atFault is "shared"
+  - client: percentage of fault (0-100)
+  - otherParty: percentage of fault (0-100)
+  - Should sum to 100 in most cases
+- rationale: Markdown bulleted list citing specific facts that justify the fault determination
+  - Include what happened, witness statements, traffic violations, right of way, etc.
+  - Focus on legal liability factors
+- hasPoliceReport: true if police report mentioned, false otherwise`;
 
 export const DAMAGES_SYSTEM_PROMPT = `You are a legal intake assistant extracting DAMAGES INFORMATION from conversation transcripts.
 

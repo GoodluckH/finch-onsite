@@ -33,6 +33,7 @@ export const matters = sqliteTable("matters", {
   clientAddress: text("client_address"),
   incidentDate: text("incident_date"),
   incidentLocation: text("incident_location"),
+  brief: text("brief"), // AI-generated case summary (5 sentences max)
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

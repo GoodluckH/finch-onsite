@@ -10,6 +10,7 @@ export const ClientInfoSchema = z.object({
   clientAddress: z.string().nullable().optional(),
   incidentDate: z.string().nullable().optional(),
   incidentLocation: z.string().nullable().optional(),
+  brief: z.string().nullable().optional(), // AI-generated case summary (5 sentences max)
 });
 
 // Liability schema
@@ -22,8 +23,15 @@ const EvidenceSchema = z
   })
   .optional();
 
+const FaultPercentagesSchema = z.object({
+  client: z.number().min(0).max(100),
+  otherParty: z.number().min(0).max(100),
+});
+
 export const LiabilitySchema = z.object({
-  content: z.string(),
+  atFault: z.enum(["client", "other_party", "shared", "unclear"]),
+  faultPercentages: FaultPercentagesSchema.optional(),
+  rationale: z.string(), // Markdown bulleted list justifying fault determination
   hasPoliceReport: z.boolean(),
   evidence: z.array(EvidenceSchema).optional(),
 });

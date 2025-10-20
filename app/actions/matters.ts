@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/db";
-import { matters, intakeFormData } from "@/db/schema";
+import { matters, intakeFormData, transcripts, turns } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import type { Liability, Damages, Coverage } from "@/db/types";
@@ -51,7 +51,8 @@ export async function getMatter(id: number) {
 export async function createMatter(name: string) {
   // Create default intake form data
   const defaultLiability: Liability = {
-    content: "",
+    atFault: "unclear",
+    rationale: "",
     hasPoliceReport: false,
     evidence: [],
   };
@@ -91,20 +92,34 @@ export async function createMatter(name: string) {
 }
 
 export async function deleteMatter(id: number) {
-  // Get the matter to find the intake form data ID
-  const matter = await db
-    .select({ intakeFormDataId: matters.intakeFormDataId })
-    .from(matters)
-    .where(eq(matters.id, id))
-    .limit(1);
+  // Get the matter to find the intake form data ID and transcript ID
+  const matter = await db.query.matters.findFirst({
+    where: eq(matters.id, id),
+    with: {
+      transcript: true,
+    },
+  });
 
-  if (matter[0]) {
-    // Delete matter first (due to foreign key)
+  if (matter) {
+    // Step 1: Delete turns if transcript exists
+    if (matter.transcript) {
+      await db
+        .delete(turns)
+        .where(eq(turns.transcriptId, matter.transcript.id));
+
+      // Step 2: Delete transcript
+      await db
+        .delete(transcripts)
+        .where(eq(transcripts.id, matter.transcript.id));
+    }
+
+    // Step 3: Delete matter
     await db.delete(matters).where(eq(matters.id, id));
-    // Then delete intake form data
+
+    // Step 4: Delete intake form data
     await db
       .delete(intakeFormData)
-      .where(eq(intakeFormData.id, matter[0].intakeFormDataId));
+      .where(eq(intakeFormData.id, matter.intakeFormDataId));
   }
 
   revalidatePath("/");

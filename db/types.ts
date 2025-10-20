@@ -4,6 +4,9 @@ export type CaseType = "dog_bites" | "mva" | "slip_and_fall";
 // Severity Levels
 export type Severity = "low" | "medium" | "high";
 
+// At-Fault determination
+export type AtFault = "client" | "other_party" | "shared" | "unclear";
+
 // Evidence
 export type Evidence = {
   id?: string;
@@ -12,9 +15,17 @@ export type Evidence = {
   url?: string;
 };
 
+// Fault Percentages (for shared fault cases)
+export type FaultPercentages = {
+  client: number; // 0-100
+  otherParty: number; // 0-100
+};
+
 // Liability
 export type Liability = {
-  content: string;
+  atFault: AtFault;
+  faultPercentages?: FaultPercentages;
+  rationale: string; // Markdown bulleted list justifying fault
   hasPoliceReport: boolean;
   evidence?: Evidence[];
 };
@@ -77,6 +88,7 @@ export type Matter = {
   clientAddress?: string | null;
   incidentDate?: string | null;
   incidentLocation?: string | null;
+  brief?: string | null; // AI-generated case summary
   createdAt: Date;
   updatedAt: Date;
   intakeFormDataId: number;

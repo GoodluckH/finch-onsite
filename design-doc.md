@@ -62,6 +62,7 @@ Represents a legal case or matter being handled by the law firm, including clien
 | client_address | TEXT | NULL | Client's physical address (may be missing from transcript) |
 | incident_date | TEXT | NULL | Date of the incident in ISO format (may be missing from transcript) |
 | incident_location | TEXT | NULL | Location where the incident occurred (may be missing from transcript) |
+| brief | TEXT | NULL | AI-generated case summary (5 sentences max) |
 | created_at | INTEGER | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Unix timestamp of when the matter was created |
 | updated_at | INTEGER | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Unix timestamp of last update |
 | intake_form_data_id | INTEGER | FOREIGN KEY → intake_form_data(id), UNIQUE | Links to the associated intake form data |
@@ -107,14 +108,19 @@ const CASE_TYPES = ['dog_bites', 'mva', 'slip_and_fall'] as const;
 ### 4. JSON Field Structures
 
 #### Liability Field (JSONB-like)
-Stores liability information for the legal matter.
+Stores liability information for the legal matter with focus on fault determination.
 
 **Structure**:
 ```typescript
 {
-  content: string;              // Required - Markdown-formatted string (typically bulleted lists)
-  hasPoliceReport: boolean;     // Required - Whether a police report exists
-  evidence?: Evidence[];        // Optional - Array of evidence items
+  atFault: 'client' | 'other_party' | 'shared' | 'unclear';  // Required - Who is at fault
+  faultPercentages?: {                                        // Required if atFault === 'shared'
+    client: number;      // 0-100
+    otherParty: number;  // 0-100
+  };
+  rationale: string;                // Required - Markdown bulleted list justifying fault determination
+  hasPoliceReport: boolean;         // Required - Whether a police report exists
+  evidence?: Evidence[];            // Optional - Array of evidence items
 }
 
 // Evidence type (structure TBD)
@@ -127,18 +133,40 @@ type Evidence = {
 }
 ```
 
-**Content Field Format**:
-- The `content` field stores **markdown-formatted text**
-- Typically structured as bulleted lists for clarity
-- AI will generate content in markdown format from transcript analysis
-- Frontend must render markdown properly (requires markdown parser)
+**Field Descriptions**:
+
+**`atFault`** (Required):
+- Determines who is primarily at fault for the incident
+- Values:
+  - `'client'` - The client is at fault
+  - `'other_party'` - The other party is at fault
+  - `'shared'` - Fault is shared between both parties (requires `faultPercentages`)
+  - `'unclear'` - Fault cannot be clearly determined from available information
+
+**`faultPercentages`** (Required if `atFault === 'shared'`):
+- Object containing fault distribution when fault is shared
+- `client`: Percentage of fault assigned to client (0-100)
+- `otherParty`: Percentage of fault assigned to other party (0-100)
+- Both values should sum to 100 in most cases
+- Example: `{ client: 30, otherParty: 70 }` means client is 30% at fault
+
+**`rationale`** (Required):
+- Markdown-formatted bulleted list justifying the fault determination
+- Should cite specific facts, evidence, and legal principles
+- AI will generate from transcript analysis
 - Example:
   ```markdown
-  - Client was driving south on Main St at approximately 35mph
-  - Defendant ran red light at intersection of Main St and 5th Ave
+  - Client had green light and right of way at intersection
+  - Other party ran red light, confirmed by two witnesses
+  - Police report cites other party for traffic violation
   - Weather conditions were clear, no visibility issues
-  - Client had right of way at time of collision
+  - Client was traveling at posted speed limit (35 mph)
+  - Other party admits to running red light in police statement
   ```
+
+**`hasPoliceReport`** (Required):
+- Boolean indicating whether a police report was filed
+- Critical for establishing official record of incident
 
 #### Damages Field (JSONB-like)
 Stores damage assessment information for the legal matter.

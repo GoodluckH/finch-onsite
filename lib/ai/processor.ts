@@ -109,8 +109,9 @@ export async function processTranscript(
       `Incident Location: ${merged.clientInfo.incidentLocation || "Not extracted"}`
     );
     console.log(
-      `Liability Points: ${merged.liability.content.split("\n").filter((l) => l.trim()).length}`
+      `Liability Rationale Points: ${merged.liability.rationale.split("\n").filter((l: string) => l.trim()).length}`
     );
+    console.log(`At Fault: ${merged.liability.atFault}`);
     console.log(
       `Police Report: ${merged.liability.hasPoliceReport ? "Yes" : "No"}`
     );

@@ -76,7 +76,7 @@ export async function extractFromChunkParallel(
           temperature: AI_CONFIG.TEMPERATURE,
         }).then((result) => {
           console.log(
-            `  ✓ [Liability] Content length: ${result.object.content.length} chars, Police report: ${result.object.hasPoliceReport}`
+            `  ✓ [Liability] At-fault: ${result.object.atFault}, Rationale length: ${result.object.rationale.length} chars, Police report: ${result.object.hasPoliceReport}`
           );
           return result;
         }),

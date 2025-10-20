@@ -32,14 +32,14 @@ function mergeClientInfo(infos: ClientInfo[]): ClientInfo {
 function mergeLiability(liabilities: Liability[]): Liability {
   console.log(`[Merger] Merging ${liabilities.length} liability objects`);
 
-  // Combine all bullet points
+  // Combine all bullet points from rationale
   const allPoints = liabilities
     .flatMap((l) =>
-      l.content
+      l.rationale
         .split("\n")
-        .filter((line) => line.trim().startsWith("-") || line.trim().startsWith("*"))
+        .filter((line: string) => line.trim().startsWith("-") || line.trim().startsWith("*"))
     )
-    .map((line) => line.trim());
+    .map((line: string) => line.trim());
 
   // Deduplicate
   const uniquePoints = [...new Set(allPoints)];
@@ -51,8 +51,39 @@ function mergeLiability(liabilities: Liability[]): Liability {
   // Any mention of police report = true
   const hasPoliceReport = liabilities.some((l) => l.hasPoliceReport);
 
+  // Use the most specific fault determination (prefer non-unclear values)
+  const faultDeterminations = liabilities.map((l) => l.atFault);
+  const atFault =
+    faultDeterminations.find((f) => f !== "unclear") || "unclear";
+
+  // If shared fault, average the percentages
+  let faultPercentages: { client: number; otherParty: number } | undefined;
+  if (atFault === "shared") {
+    const sharedLiabilities = liabilities.filter(
+      (l) => l.atFault === "shared" && l.faultPercentages
+    );
+    if (sharedLiabilities.length > 0) {
+      const avgClient =
+        sharedLiabilities.reduce(
+          (sum, l) => sum + (l.faultPercentages?.client || 0),
+          0
+        ) / sharedLiabilities.length;
+      const avgOtherParty =
+        sharedLiabilities.reduce(
+          (sum, l) => sum + (l.faultPercentages?.otherParty || 0),
+          0
+        ) / sharedLiabilities.length;
+      faultPercentages = {
+        client: Math.round(avgClient),
+        otherParty: Math.round(avgOtherParty),
+      };
+    }
+  }
+
   return {
-    content: uniquePoints.join("\n"),
+    atFault,
+    faultPercentages,
+    rationale: uniquePoints.join("\n"),
     hasPoliceReport,
     evidence: [],
   };
