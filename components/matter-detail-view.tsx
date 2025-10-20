@@ -327,34 +327,16 @@ export function MatterDetailView({
           <Section title="Liability">
             {isEditing ? (
               <div className="space-y-2">
-                <div className="flex items-center justify-between mb-2">
-                  <Label className="text-xs">Liability Content (Markdown)</Label>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setLiabilityPreview(!liabilityPreview)}
-                  >
-                    {liabilityPreview ? "Edit" : "Preview"}
-                  </Button>
-                </div>
-                {liabilityPreview ? (
-                  <div className="prose prose-sm max-w-none border rounded p-3">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {liability.content || "*No content*"}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <Textarea
-                    value={liability.content}
-                    onChange={(e) => {
-                      setLiability({ ...liability, content: e.target.value });
-                      markAsChanged();
-                    }}
-                    placeholder="Enter liability information (supports markdown)"
-                    className="min-h-[120px] text-sm"
-                  />
-                )}
+                <Label className="text-xs">Liability Content (Markdown)</Label>
+                <Textarea
+                  value={liability.content}
+                  onChange={(e) => {
+                    setLiability({ ...liability, content: e.target.value });
+                    markAsChanged();
+                  }}
+                  placeholder="Enter liability information (supports markdown)"
+                  className="min-h-[120px] text-sm"
+                />
                 <div className="flex items-center gap-2">
                   <Label htmlFor="hasPoliceReport" className="text-xs">
                     Police Report:
@@ -498,6 +480,12 @@ export function MatterDetailView({
                           )}
                         </div>
                       )}
+                      {coverage.clientCoverageDetails && (
+                        <div className="mt-2 pt-2 border-t border-blue-200">
+                          <p className="text-xs text-gray-600 mb-1">Coverage Details:</p>
+                          <p className="text-sm text-gray-800">{coverage.clientCoverageDetails}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -550,9 +538,41 @@ export function MatterDetailView({
                           )}
                         </div>
                       )}
+                      {coverage.otherPartyCoverageDetails && (
+                        <div className="mt-2 pt-2 border-t border-amber-200">
+                          <p className="text-xs text-gray-600 mb-1">Coverage Details:</p>
+                          <p className="text-sm text-gray-800">{coverage.otherPartyCoverageDetails}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
+
+                {/* Medical Coverage */}
+                {(coverage.medicalCoverageAvailable !== null || coverage.medicalCoverageDetails) && (
+                  <div className="bg-green-50 border border-green-200 rounded p-3">
+                    <h4 className="text-xs font-semibold text-green-900 mb-2">
+                      Medical Coverage
+                    </h4>
+                    <StatusBadge value={coverage.medicalCoverageAvailable} />
+                    {coverage.medicalCoverageDetails && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-600 mb-1">Details:</p>
+                        <p className="text-sm text-gray-800">{coverage.medicalCoverageDetails}</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* UM/UIM Coverage */}
+                {coverage.underinsuredMotoristCoverage !== null && (
+                  <div className="bg-purple-50 border border-purple-200 rounded p-3">
+                    <h4 className="text-xs font-semibold text-purple-900 mb-2">
+                      Underinsured/Uninsured Motorist Coverage
+                    </h4>
+                    <StatusBadge value={coverage.underinsuredMotoristCoverage} />
+                  </div>
+                )}
 
                 {/* Policy Limits & Notes */}
                 {coverage.policyLimits && (
@@ -930,77 +950,87 @@ function CoverageEditor({
             </div>
           </div>
 
-          {coverage.clientHasInsurance && (
-            <>
-              <div>
-                <Label className="text-xs">Provider</Label>
-                <Input
-                  value={coverage.clientInsuranceProvider || ""}
-                  onChange={(e) =>
-                    setCoverage({
-                      ...coverage,
-                      clientInsuranceProvider: e.target.value,
-                    })
-                  }
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Policy Number</Label>
-                <Input
-                  value={coverage.clientPolicyNumber || ""}
-                  onChange={(e) =>
-                    setCoverage({
-                      ...coverage,
-                      clientPolicyNumber: e.target.value,
-                    })
-                  }
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Effective Date</Label>
-                  <Input
-                    type="date"
-                    value={coverage.clientCoverageEffectiveDate || ""}
-                    onChange={(e) =>
-                      setCoverage({
-                        ...coverage,
-                        clientCoverageEffectiveDate: e.target.value,
-                      })
-                    }
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Expiration Date</Label>
-                  <Input
-                    type="date"
-                    value={coverage.clientCoverageExpirationDate || ""}
-                    onChange={(e) =>
-                      setCoverage({
-                        ...coverage,
-                        clientCoverageExpirationDate: e.target.value,
-                      })
-                    }
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
-              {clientCoverageWarning && (
-                <p
-                  className={`text-xs font-medium ${
-                    clientCoverageWarning.startsWith("⚠️")
-                      ? "text-red-600"
-                      : "text-green-600"
-                  }`}
-                >
-                  {clientCoverageWarning}
-                </p>
-              )}
-            </>
+          <div>
+            <Label className="text-xs">Provider</Label>
+            <Input
+              value={coverage.clientInsuranceProvider || ""}
+              onChange={(e) =>
+                setCoverage({
+                  ...coverage,
+                  clientInsuranceProvider: e.target.value,
+                })
+              }
+              className="h-8 text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Policy Number</Label>
+            <Input
+              value={coverage.clientPolicyNumber || ""}
+              onChange={(e) =>
+                setCoverage({
+                  ...coverage,
+                  clientPolicyNumber: e.target.value,
+                })
+              }
+              className="h-8 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">Effective Date</Label>
+              <Input
+                type="date"
+                value={coverage.clientCoverageEffectiveDate || ""}
+                onChange={(e) =>
+                  setCoverage({
+                    ...coverage,
+                    clientCoverageEffectiveDate: e.target.value,
+                  })
+                }
+                className="h-8 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Expiration Date</Label>
+              <Input
+                type="date"
+                value={coverage.clientCoverageExpirationDate || ""}
+                onChange={(e) =>
+                  setCoverage({
+                    ...coverage,
+                    clientCoverageExpirationDate: e.target.value,
+                  })
+                }
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+          {clientCoverageWarning && (
+            <p
+              className={`text-xs font-medium ${
+                clientCoverageWarning.startsWith("⚠️")
+                  ? "text-red-600"
+                  : "text-green-600"
+              }`}
+            >
+              {clientCoverageWarning}
+            </p>
           )}
+          <div>
+            <Label className="text-xs">Coverage Details</Label>
+            <Textarea
+              value={coverage.clientCoverageDetails || ""}
+              onChange={(e) =>
+                setCoverage({
+                  ...coverage,
+                  clientCoverageDetails: e.target.value,
+                })
+              }
+              className="text-sm min-h-[60px]"
+              placeholder="Additional coverage details..."
+            />
+          </div>
         </div>
       </div>
 
@@ -1055,77 +1085,202 @@ function CoverageEditor({
             </div>
           </div>
 
-          {coverage.otherPartyHasInsurance && (
-            <>
-              <div>
-                <Label className="text-xs">Provider</Label>
-                <Input
-                  value={coverage.otherPartyInsuranceProvider || ""}
-                  onChange={(e) =>
-                    setCoverage({
-                      ...coverage,
-                      otherPartyInsuranceProvider: e.target.value,
-                    })
-                  }
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Policy Number</Label>
-                <Input
-                  value={coverage.otherPartyPolicyNumber || ""}
-                  onChange={(e) =>
-                    setCoverage({
-                      ...coverage,
-                      otherPartyPolicyNumber: e.target.value,
-                    })
-                  }
-                  className="h-8 text-sm"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <Label className="text-xs">Effective Date</Label>
-                  <Input
-                    type="date"
-                    value={coverage.otherPartyCoverageEffectiveDate || ""}
-                    onChange={(e) =>
-                      setCoverage({
-                        ...coverage,
-                        otherPartyCoverageEffectiveDate: e.target.value,
-                      })
-                    }
-                    className="h-8 text-sm"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Expiration Date</Label>
-                  <Input
-                    type="date"
-                    value={coverage.otherPartyCoverageExpirationDate || ""}
-                    onChange={(e) =>
-                      setCoverage({
-                        ...coverage,
-                        otherPartyCoverageExpirationDate: e.target.value,
-                      })
-                    }
-                    className="h-8 text-sm"
-                  />
-                </div>
-              </div>
-              {otherPartyCoverageWarning && (
-                <p
-                  className={`text-xs font-medium ${
-                    otherPartyCoverageWarning.startsWith("⚠️")
-                      ? "text-red-600"
-                      : "text-green-600"
-                  }`}
-                >
-                  {otherPartyCoverageWarning}
-                </p>
-              )}
-            </>
+          <div>
+            <Label className="text-xs">Provider</Label>
+            <Input
+              value={coverage.otherPartyInsuranceProvider || ""}
+              onChange={(e) =>
+                setCoverage({
+                  ...coverage,
+                  otherPartyInsuranceProvider: e.target.value,
+                })
+              }
+              className="h-8 text-sm"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Policy Number</Label>
+            <Input
+              value={coverage.otherPartyPolicyNumber || ""}
+              onChange={(e) =>
+                setCoverage({
+                  ...coverage,
+                  otherPartyPolicyNumber: e.target.value,
+                })
+              }
+              className="h-8 text-sm"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <Label className="text-xs">Effective Date</Label>
+              <Input
+                type="date"
+                value={coverage.otherPartyCoverageEffectiveDate || ""}
+                onChange={(e) =>
+                  setCoverage({
+                    ...coverage,
+                    otherPartyCoverageEffectiveDate: e.target.value,
+                  })
+                }
+                className="h-8 text-sm"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Expiration Date</Label>
+              <Input
+                type="date"
+                value={coverage.otherPartyCoverageExpirationDate || ""}
+                onChange={(e) =>
+                  setCoverage({
+                    ...coverage,
+                    otherPartyCoverageExpirationDate: e.target.value,
+                  })
+                }
+                className="h-8 text-sm"
+              />
+            </div>
+          </div>
+          {otherPartyCoverageWarning && (
+            <p
+              className={`text-xs font-medium ${
+                otherPartyCoverageWarning.startsWith("⚠️")
+                  ? "text-red-600"
+                  : "text-green-600"
+              }`}
+            >
+              {otherPartyCoverageWarning}
+            </p>
           )}
+          <div>
+            <Label className="text-xs">Coverage Details</Label>
+            <Textarea
+              value={coverage.otherPartyCoverageDetails || ""}
+              onChange={(e) =>
+                setCoverage({
+                  ...coverage,
+                  otherPartyCoverageDetails: e.target.value,
+                })
+              }
+              className="text-sm min-h-[60px]"
+              placeholder="Additional coverage details..."
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Medical Coverage */}
+      <div className="bg-green-50 border border-green-200 rounded p-3">
+        <h4 className="text-xs font-semibold text-green-900 mb-2">
+          Medical Coverage
+        </h4>
+        <div className="space-y-2">
+          <div>
+            <Label className="text-xs mb-1">Available?</Label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() =>
+                  setCoverage({ ...coverage, medicalCoverageAvailable: true })
+                }
+                className={`flex-1 px-2 py-1 text-xs border rounded ${
+                  coverage.medicalCoverageAvailable === true
+                    ? "bg-green-100 border-green-600 text-green-800"
+                    : "bg-white border-gray-300"
+                }`}
+              >
+                Yes
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setCoverage({ ...coverage, medicalCoverageAvailable: false })
+                }
+                className={`flex-1 px-2 py-1 text-xs border rounded ${
+                  coverage.medicalCoverageAvailable === false
+                    ? "bg-green-100 border-green-600 text-green-800"
+                    : "bg-white border-gray-300"
+                }`}
+              >
+                No
+              </button>
+              <button
+                type="button"
+                onClick={() =>
+                  setCoverage({ ...coverage, medicalCoverageAvailable: null })
+                }
+                className={`flex-1 px-2 py-1 text-xs border rounded ${
+                  coverage.medicalCoverageAvailable === null
+                    ? "bg-green-100 border-green-600 text-green-800"
+                    : "bg-white border-gray-300"
+                }`}
+              >
+                Unknown
+              </button>
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Medical Coverage Details</Label>
+            <Textarea
+              value={coverage.medicalCoverageDetails || ""}
+              onChange={(e) =>
+                setCoverage({
+                  ...coverage,
+                  medicalCoverageDetails: e.target.value,
+                })
+              }
+              className="text-sm min-h-[60px]"
+              placeholder="Medical coverage details..."
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* UM/UIM Coverage */}
+      <div className="bg-purple-50 border border-purple-200 rounded p-3">
+        <h4 className="text-xs font-semibold text-purple-900 mb-2">
+          Underinsured/Uninsured Motorist Coverage
+        </h4>
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() =>
+              setCoverage({ ...coverage, underinsuredMotoristCoverage: true })
+            }
+            className={`flex-1 px-2 py-1 text-xs border rounded ${
+              coverage.underinsuredMotoristCoverage === true
+                ? "bg-purple-100 border-purple-600 text-purple-800"
+                : "bg-white border-gray-300"
+            }`}
+          >
+            Yes
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setCoverage({ ...coverage, underinsuredMotoristCoverage: false })
+            }
+            className={`flex-1 px-2 py-1 text-xs border rounded ${
+              coverage.underinsuredMotoristCoverage === false
+                ? "bg-purple-100 border-purple-600 text-purple-800"
+                : "bg-white border-gray-300"
+            }`}
+          >
+            No
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setCoverage({ ...coverage, underinsuredMotoristCoverage: null })
+            }
+            className={`flex-1 px-2 py-1 text-xs border rounded ${
+              coverage.underinsuredMotoristCoverage === null
+                ? "bg-purple-100 border-purple-600 text-purple-800"
+                : "bg-white border-gray-300"
+            }`}
+          >
+            Unknown
+          </button>
         </div>
       </div>
 
