@@ -167,11 +167,15 @@ Stores insurance coverage information for all parties involved in the matter.
   clientHasInsurance: boolean | null;           // Client's insurance status (null if unknown from transcript)
   clientInsuranceProvider?: string;             // Client's insurance company name
   clientPolicyNumber?: string;                  // Client's policy number
+  clientCoverageEffectiveDate?: string;         // Coverage effective date (ISO format)
+  clientCoverageExpirationDate?: string;        // Coverage expiration date (ISO format)
   clientCoverageDetails?: string;               // Additional client coverage details (text)
 
   otherPartyHasInsurance: boolean | null;       // Other party's insurance status (null if unknown)
   otherPartyInsuranceProvider?: string;         // Other party's insurance company name
   otherPartyPolicyNumber?: string;              // Other party's policy number
+  otherPartyCoverageEffectiveDate?: string;     // Other party coverage effective date (ISO format)
+  otherPartyCoverageExpirationDate?: string;    // Other party coverage expiration date (ISO format)
   otherPartyCoverageDetails?: string;           // Additional other party coverage details (text)
 
   medicalCoverageAvailable: boolean | null;     // Whether medical coverage (PIP, MedPay) is available
@@ -187,8 +191,11 @@ Stores insurance coverage information for all parties involved in the matter.
 **Coverage Field Notes**:
 - Uses nullable booleans (`boolean | null`) to distinguish between "no" (false), "yes" (true), and "unknown/not mentioned in transcript" (null)
 - All detail fields are optional since transcript may not contain complete information
+- **Effective dates are critical**: Used to determine if coverage applies to the incident date
+- Coverage dates stored as ISO format strings (YYYY-MM-DD) for consistency with incident_date
 - UI should visually distinguish between "No" and "Unknown/Not mentioned"
-- Policy limits stored as string to support various formats
+- UI should highlight if incident date falls outside coverage period (red warning)
+- Policy limits stored as string to support various formats (e.g., "100/300", "25/50/25")
 - Comprehensive enough to capture common personal injury insurance scenarios
 - `notes` field for edge cases or additional context from transcript
 
