@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 
 interface TranscriptViewerProps {
   transcript: Transcript;
+  turns: any[]; // Turn records with IDs from database
   highlightedTurnIds?: number[];
   onHighlightRequest?: (turnIds: number[]) => void;
 }
@@ -49,6 +50,7 @@ function getSpeakerColors(speaker: number) {
 
 export function TranscriptViewer({
   transcript,
+  turns,
   highlightedTurnIds = []
 }: TranscriptViewerProps) {
   const turnRefs = useRef<Map<number, HTMLDivElement>>(new Map());
@@ -91,8 +93,9 @@ export function TranscriptViewer({
       >
         {transcript.segments.map((segment, index) => {
           const colors = getSpeakerColors(segment.speaker);
-          // Note: turnId would be index + 1 if turns start at 1, or we need to pass actual turn IDs
-          const turnId = index + 1; // Assuming 1-based turn IDs
+          // Get the actual turn ID from the database turns
+          const turn = turns[index];
+          const turnId = turn?.id || index + 1; // Fallback to index + 1 if no turn data
           const isHighlighted = highlightedTurnIds.includes(turnId);
 
           return (

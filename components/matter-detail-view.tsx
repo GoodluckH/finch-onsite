@@ -48,11 +48,21 @@ export function MatterDetailView({
 }: MatterDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [isBriefExpanded, setIsBriefExpanded] = useState(true);
 
   // Helper function to get turn IDs for a specific field
   const getCitationsForField = (section: "clientInfo" | "liability" | "damages" | "coverage", field: string): number[] => {
-    let sectionCitations =  matter.citations[section] || []
+    let sectionCitations: any[] = [];
 
+    if (section === "clientInfo") {
+      sectionCitations = matter.citations?.clientInfo || [];
+    } else if (section === "liability") {
+      sectionCitations = liability.citations || [];
+    } else if (section === "damages") {
+      sectionCitations = damages.citations || [];
+    } else if (section === "coverage") {
+      sectionCitations = coverage.citations || [];
+    }
 
     const fieldCitation = sectionCitations.find((c: any) => c.field === field);
     return fieldCitation?.turnIds || [];
@@ -232,12 +242,25 @@ export function MatterDetailView({
             {/* Case Brief Card */}
       {brief && !isEditing && (
         <div className="bg-blue-50 border border-blue-200 rounded-md">
-          <div className="border-b border-blue-200 px-4 py-2 bg-blue-100">
+          <button
+            onClick={() => setIsBriefExpanded(!isBriefExpanded)}
+            className="w-full border-b border-blue-200 px-4 py-2 bg-blue-100 flex items-center justify-between hover:bg-blue-150 transition-colors"
+          >
             <h2 className="text-sm font-semibold text-blue-900">AI Case Brief</h2>
-          </div>
-          <div className="p-4">
-            <p className="text-sm text-gray-800 leading-relaxed">{brief}</p>
-          </div>
+            <svg
+              className={`w-4 h-4 text-blue-900 transition-transform ${isBriefExpanded ? 'rotate-180' : ''}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {isBriefExpanded && (
+            <div className="p-4">
+              <p className="text-sm text-gray-800 leading-relaxed">{brief}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -511,7 +534,15 @@ export function MatterDetailView({
 
                   {liability.rationale ? (
                     <div>
-                      <p className="text-xs font-medium text-gray-700 mb-2">Rationale:</p>
+                      <div className="flex items-center gap-2 mb-2">
+                        <p className="text-xs font-medium text-gray-700">Rationale:</p>
+                        {getCitationsForField("liability", "rationale").length > 0 && onCitationClick && (
+                          <CitationBadge
+                            turnIds={getCitationsForField("liability", "rationale")}
+                            onClickCitation={onCitationClick}
+                          />
+                        )}
+                      </div>
                       <div className="prose prose-sm max-w-none">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>
                           {liability.rationale}
@@ -540,14 +571,18 @@ export function MatterDetailView({
               <DamagesEditor damages={damages} setDamages={(val) => { setDamages(val); markAsChanged(); }} />
             ) : (
               <>
-                <DataField
-                  label="Overall Severity"
-                  value={
-                    damages.severity.charAt(0).toUpperCase() +
-                    damages.severity.slice(1)
-                  }
-                  inline
-                />
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs text-gray-600">Overall Severity:</span>
+                  <span className="text-sm font-medium">
+                    {damages.severity.charAt(0).toUpperCase() + damages.severity.slice(1)}
+                  </span>
+                  {getCitationsForField("damages", "severity").length > 0 && onCitationClick && (
+                    <CitationBadge
+                      turnIds={getCitationsForField("damages", "severity")}
+                      onClickCitation={onCitationClick}
+                    />
+                  )}
+                </div>
                 {damages.indications.length > 0 ? (
                   <div className="mt-3 space-y-2">
                     <p className="text-xs font-medium text-gray-700">
@@ -558,7 +593,15 @@ export function MatterDetailView({
                         key={index}
                         className="pl-3 py-2 border-l-2 border-gray-300 bg-gray-50 rounded"
                       >
-                        <p className="text-sm">{indication.description}</p>
+                        <div className="flex items-start gap-2 mb-1">
+                          <p className="text-sm flex-1">{indication.description}</p>
+                          {getCitationsForField("damages", `indications[${index}]`).length > 0 && onCitationClick && (
+                            <CitationBadge
+                              turnIds={getCitationsForField("damages", `indications[${index}]`)}
+                              onClickCitation={onCitationClick}
+                            />
+                          )}
+                        </div>
                         <p className="text-xs text-muted-foreground mt-1">
                           Severity:{" "}
                           <span
@@ -592,9 +635,17 @@ export function MatterDetailView({
               <div className="space-y-4">
                 {/* Client Insurance */}
                 <div className="bg-blue-50 border border-blue-200 rounded p-3">
-                  <h4 className="text-xs font-semibold text-blue-900 mb-2">
-                    Client Insurance
-                  </h4>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="text-xs font-semibold text-blue-900">
+                      Client Insurance
+                    </h4>
+                    {getCitationsForField("coverage", "clientHasInsurance").length > 0 && onCitationClick && (
+                      <CitationBadge
+                        turnIds={getCitationsForField("coverage", "clientHasInsurance")}
+                        onClickCitation={onCitationClick}
+                      />
+                    )}
+                  </div>
                   <StatusBadge value={coverage.clientHasInsurance} />
                   {coverage.clientHasInsurance && (
                     <div className="mt-2 space-y-1.5">
@@ -650,9 +701,17 @@ export function MatterDetailView({
 
                 {/* Other Party Insurance */}
                 <div className="bg-amber-50 border border-amber-200 rounded p-3">
-                  <h4 className="text-xs font-semibold text-amber-900 mb-2">
-                    Other Party Insurance
-                  </h4>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="text-xs font-semibold text-amber-900">
+                      Other Party Insurance
+                    </h4>
+                    {getCitationsForField("coverage", "otherPartyHasInsurance").length > 0 && onCitationClick && (
+                      <CitationBadge
+                        turnIds={getCitationsForField("coverage", "otherPartyHasInsurance")}
+                        onClickCitation={onCitationClick}
+                      />
+                    )}
+                  </div>
                   <StatusBadge value={coverage.otherPartyHasInsurance} />
                   {coverage.otherPartyHasInsurance && (
                     <div className="mt-2 space-y-1.5">
@@ -709,9 +768,17 @@ export function MatterDetailView({
                 {/* Medical Coverage */}
                 {(coverage.medicalCoverageAvailable !== null || coverage.medicalCoverageDetails) && (
                   <div className="bg-green-50 border border-green-200 rounded p-3">
-                    <h4 className="text-xs font-semibold text-green-900 mb-2">
-                      Medical Coverage
-                    </h4>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="text-xs font-semibold text-green-900">
+                        Medical Coverage
+                      </h4>
+                      {getCitationsForField("coverage", "medicalCoverageAvailable").length > 0 && onCitationClick && (
+                        <CitationBadge
+                          turnIds={getCitationsForField("coverage", "medicalCoverageAvailable")}
+                          onClickCitation={onCitationClick}
+                        />
+                      )}
+                    </div>
                     <StatusBadge value={coverage.medicalCoverageAvailable} />
                     {coverage.medicalCoverageDetails && (
                       <div className="mt-2">
@@ -725,9 +792,17 @@ export function MatterDetailView({
                 {/* UM/UIM Coverage */}
                 {coverage.underinsuredMotoristCoverage !== null && (
                   <div className="bg-purple-50 border border-purple-200 rounded p-3">
-                    <h4 className="text-xs font-semibold text-purple-900 mb-2">
-                      Underinsured/Uninsured Motorist Coverage
-                    </h4>
+                    <div className="flex items-center gap-2 mb-2">
+                      <h4 className="text-xs font-semibold text-purple-900">
+                        Underinsured/Uninsured Motorist Coverage
+                      </h4>
+                      {getCitationsForField("coverage", "underinsuredMotoristCoverage").length > 0 && onCitationClick && (
+                        <CitationBadge
+                          turnIds={getCitationsForField("coverage", "underinsuredMotoristCoverage")}
+                          onClickCitation={onCitationClick}
+                        />
+                      )}
+                    </div>
                     <StatusBadge value={coverage.underinsuredMotoristCoverage} />
                   </div>
                 )}

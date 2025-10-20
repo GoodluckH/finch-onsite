@@ -8,13 +8,19 @@ import type { Transcript } from "@/lib/ai/types";
 interface MatterPageContentProps {
   matter: any;
   transcript: Transcript | null;
+  turns: any[] | null;
 }
 
-export function MatterPageContent({ matter, transcript }: MatterPageContentProps) {
+export function MatterPageContent({ matter, transcript, turns }: MatterPageContentProps) {
   const [highlightedTurnIds, setHighlightedTurnIds] = useState<number[]>([]);
 
   const handleCitationClick = (turnIds: number[]) => {
-    setHighlightedTurnIds(turnIds);
+    // If clicking the same citations, deselect (clear highlights)
+    if (JSON.stringify(highlightedTurnIds) === JSON.stringify(turnIds)) {
+      setHighlightedTurnIds([]);
+    } else {
+      setHighlightedTurnIds(turnIds);
+    }
   };
 
   return (
@@ -39,6 +45,7 @@ export function MatterPageContent({ matter, transcript }: MatterPageContentProps
         <div className="lg:sticky lg:top-4 lg:self-start">
           <TranscriptViewer
             transcript={transcript}
+            turns={turns || []}
             highlightedTurnIds={highlightedTurnIds}
           />
         </div>
