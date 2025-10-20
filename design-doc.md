@@ -420,15 +420,389 @@ Database schema with ORM mappings:
 5. Server deletes orphaned intake form data
 6. Page revalidates, matter removed from list
 
-## AI Integration & Transcript Processing (Planned)
+## Phase II: AI Integration & Transcript Processing
 
-### Transcript Upload Flow
+### Overview
+Phase II implements AI-powered extraction from conversation transcripts using Vercel AI SDK. The system processes large transcripts by intelligently chunking them with overlap to preserve context, then uses an LLM to extract structured intake form data.
+
+### Technology Stack
+- **AI SDK**: Vercel AI SDK for LLM integration
+- **Chunking**: Custom overlap-based chunking with token estimation
+- **Token Estimation**: Approximate token counting for chunk size management
+- **LLM Provider**: Configurable (OpenAI, Anthropic, etc.)
+
+### Transcript Format
+Transcripts are expected in JSON format with the following structure:
+
+```json
+{
+  "segments": [
+    {
+      "speaker": 0,  // Speaker identifier (0 = lawyer, 1 = client)
+      "content": "Good afternoon, Ms. Harris. This is Anthony Rodriguez..."
+    },
+    {
+      "speaker": 1,
+      "content": "Hi Anthony, I'm managing alright, thanks..."
+    },
+    {
+      "speaker": 0,
+      "content": "Of course! Carson & Pine has been handling..."
+    }
+    // ... continues
+  ]
+}
+```
+
+**Format Notes**:
+- Top-level object contains `segments` array
+- Each segment has:
+  - `speaker`: Number (speaker identifier, could be any number)
+  - `content`: String containing the spoken text
+- Segments are in chronological order
+- **No assumptions** are made about which speaker is the lawyer vs. client
+- The LLM will infer speaker roles from conversational context and content
+
+### Transcript Chunking Strategy
+
+#### Problem
+Large transcripts may exceed LLM context windows (e.g., 128k tokens). We need to:
+1. Break transcript into manageable chunks
+2. Preserve context across chunk boundaries
+3. Avoid losing critical information at cut points
+
+#### Solution: Overlapping Chunks
+
+**Chunk Parameters**:
+- `MAX_CHUNK_TOKENS`: Maximum tokens per chunk (configurable, e.g., 30000 for safety margin)
+- `OVERLAP_TOKENS`: Token overlap between chunks (configurable, e.g., 2000-3000 tokens)
+- `ESTIMATED_TOKENS_PER_CHAR`: ~0.25 tokens per character for estimation (rough heuristic)
+
+**Chunking Algorithm**:
+```typescript
+type Transcript = {
+  segments: Array<{
+    speaker: number;
+    content: string;
+  }>;
+};
+
+function chunkTranscript(transcript: Transcript, maxChunkTokens: number, overlapTokens: number): string[] {
+  // 1. Convert transcript segments to linear text representation
+  const fullText = transcript.segments
+    .map(seg => `[Speaker ${seg.speaker}]: ${seg.content}`)
+    .join('\n\n');  // Double newline between segments for clarity
+
+  // 2. Estimate tokens for the full text
+  const estimatedTotalTokens = estimateTokens(fullText);
+
+  // 3. If fits in single chunk, return as-is
+  if (estimatedTotalTokens <= maxChunkTokens) {
+    return [fullText];
+  }
+
+  // 4. Calculate chunk boundaries with overlap
+  const chunks: string[] = [];
+  let currentPosition = 0;
+
+  while (currentPosition < fullText.length) {
+    // Determine chunk end position
+    const chunkEndPosition = findChunkEnd(
+      fullText,
+      currentPosition,
+      maxChunkTokens
+    );
+
+    // Extract chunk
+    const chunk = fullText.substring(currentPosition, chunkEndPosition);
+    chunks.push(chunk);
+
+    // Move position forward, accounting for overlap
+    const overlapCharOffset = estimateCharactersForTokens(overlapTokens);
+    currentPosition = chunkEndPosition - overlapCharOffset;
+
+    // Ensure we make progress (prevent infinite loop)
+    if (currentPosition <= chunks.length * 100) {
+      currentPosition = chunkEndPosition;
+    }
+  }
+
+  return chunks;
+}
+
+function findChunkEnd(text: string, start: number, maxTokens: number): number {
+  // Estimate character position for max tokens
+  const estimatedChars = Math.floor(maxTokens / ESTIMATED_TOKENS_PER_CHAR);
+  let endPosition = Math.min(start + estimatedChars, text.length);
+
+  // Find natural break point (end of speaker turn, paragraph, sentence)
+  // Priority: speaker change > paragraph > sentence > word boundary
+  const searchWindow = endPosition - 200; // Look back up to 200 chars
+
+  // Try to find speaker change: \n[Speaker X]:
+  const speakerMatch = text.substring(searchWindow, endPosition).lastIndexOf('\n[Speaker ');
+  if (speakerMatch !== -1) {
+    return searchWindow + speakerMatch;
+  }
+
+  // Try to find paragraph break
+  const paragraphMatch = text.substring(searchWindow, endPosition).lastIndexOf('\n\n');
+  if (paragraphMatch !== -1) {
+    return searchWindow + paragraphMatch;
+  }
+
+  // Try to find sentence end
+  const sentenceMatch = text.substring(searchWindow, endPosition).match(/[.!?]\s+(?=[A-Z])/);
+  if (sentenceMatch && sentenceMatch.index !== undefined) {
+    return searchWindow + sentenceMatch.index + 1;
+  }
+
+  // Fallback: word boundary
+  const wordMatch = text.substring(searchWindow, endPosition).lastIndexOf(' ');
+  if (wordMatch !== -1) {
+    return searchWindow + wordMatch;
+  }
+
+  // Last resort: hard cut
+  return endPosition;
+}
+
+function estimateTokens(text: string): number {
+  // Rough estimation: ~4 characters per token (conservative)
+  return Math.ceil(text.length * ESTIMATED_TOKENS_PER_CHAR);
+}
+```
+
+**Overlap Rationale**:
+- Prevents context loss at boundaries
+- Typical overlap: 15-20% of chunk size
+- For 30k token chunks, 2-3k overlap is reasonable
+- Overlap includes last few speaker turns to maintain conversational context
+
+**Example**:
+```
+Chunk 1: [Position 0 to 120,000 chars] (~30k tokens)
+Chunk 2: [Position 112,000 to 232,000 chars] (~30k tokens)
+         ^^^^^^^^^^^^^
+         8k char overlap (~2k tokens)
+```
+
+### LLM Extraction Process
+
+#### Multi-Chunk Extraction Strategy
+
+**Option A: Per-Chunk Extraction + Merging** (Recommended for Phase II)
+1. Process each chunk independently
+2. Extract intake form data from each chunk
+3. Merge results using intelligent conflict resolution
+4. Final validation and cleanup
+
+**Merging Logic**:
+```typescript
+function mergeExtractions(extractions: IntakeFormData[]): IntakeFormData {
+  // Priority: later chunks override earlier chunks (fresher context)
+  // Exception: Arrays (indications, evidence) are merged/deduplicated
+  // Exception: Coverage dates use earliest/latest when both present
+
+  return extractions.reduce((merged, current) => ({
+    caseType: current.caseType || merged.caseType,
+    liability: {
+      content: mergeLiabilityContent(merged.liability.content, current.liability.content),
+      hasPoliceReport: current.liability.hasPoliceReport || merged.liability.hasPoliceReport,
+      evidence: deduplicateEvidence([
+        ...(merged.liability.evidence || []),
+        ...(current.liability.evidence || [])
+      ])
+    },
+    damages: {
+      severity: current.damages.severity || merged.damages.severity,
+      indications: deduplicateIndications([
+        ...merged.damages.indications,
+        ...current.damages.indications
+      ])
+    },
+    coverage: mergeCoverage(merged.coverage, current.coverage)
+  }));
+}
+```
+
+**Option B: Map-Reduce Pattern** (Future optimization)
+1. Extract partial data from each chunk
+2. Use final LLM call to synthesize all partial extractions
+3. Better handling of contradictions and context
+
+#### LLM Prompt Design
+
+**System Prompt**:
+```
+You are a legal intake assistant. Extract structured information from client-lawyer conversation transcripts.
+
+The transcript contains multiple speakers identified by numbers (e.g., Speaker 0, Speaker 1).
+You must infer from context which speaker is the lawyer and which is the client/potential client.
+Extract information about the client and their legal matter.
+
+Output valid JSON matching this schema:
+{
+  caseType: "dog_bites" | "mva" | "slip_and_fall",
+  clientName, clientDob, clientPhone, clientEmail, clientAddress,
+  incidentDate, incidentLocation,
+  liability: { content (markdown), hasPoliceReport (bool), evidence (array) },
+  damages: { severity, indications: [{ description, severity }] },
+  coverage: {
+    clientHasInsurance (bool|null), clientInsuranceProvider, clientPolicyNumber,
+    clientCoverageEffectiveDate, clientCoverageExpirationDate, clientCoverageDetails,
+    otherPartyHasInsurance (bool|null), otherPartyInsuranceProvider, otherPartyPolicyNumber,
+    otherPartyCoverageEffectiveDate, otherPartyCoverageExpirationDate, otherPartyCoverageDetails,
+    medicalCoverageAvailable (bool|null), medicalCoverageDetails,
+    underinsuredMotoristCoverage (bool|null), policyLimits, notes
+  }
+}
+
+Rules:
+- Infer speaker roles from conversational context (questions asked, information provided, professional language, etc.)
+- Use null for unknown/unmentioned fields (not empty string)
+- Distinguish "no" (false) from "unknown" (null) for booleans
+- Format dates as YYYY-MM-DD
+- liability.content: markdown bulleted list summarizing liability facts from the client's perspective
+- Case type must be one of: dog_bites, mva, slip_and_fall
+- If uncertain about case type, choose most likely based on context
+- Extract only information about the CLIENT, not the lawyer or law firm
+```
+
+**User Prompt (per chunk)**:
+```
+Extract intake information from this transcript segment.
+This may be part of a larger conversation.
+
+Transcript:
+{chunk_text}
+
+Return only valid JSON, no additional text.
+```
+
+#### AI SDK Implementation
+
+```typescript
+import { generateObject } from 'ai';
+import { z } from 'zod';
+import { openai } from '@ai-sdk/openai'; // or anthropic, etc.
+
+async function extractFromChunk(chunkText: string) {
+  const result = await generateObject({
+    model: openai('gpt-4o'), // or anthropic('claude-3-5-sonnet-20241022')
+    schema: IntakeFormDataSchema, // Zod schema from db/validation.ts
+    system: SYSTEM_PROMPT,
+    prompt: `Extract intake information from this transcript segment:\n\n${chunkText}`,
+  });
+
+  return result.object;
+}
+
+async function processTranscript(transcript: Transcript): Promise<{
+  intakeFormData: IntakeFormData;
+  clientInfo: {
+    clientName?: string;
+    clientDob?: string;
+    clientPhone?: string;
+    clientEmail?: string;
+    clientAddress?: string;
+    incidentDate?: string;
+    incidentLocation?: string;
+  };
+}> {
+  // 1. Chunk transcript
+  const chunks = chunkTranscript(transcript, MAX_CHUNK_TOKENS, OVERLAP_TOKENS);
+
+  // 2. Process each chunk
+  const extractions = await Promise.all(
+    chunks.map(chunk => extractFromChunk(chunk))
+  );
+
+  // 3. Merge results
+  const merged = mergeExtractions(extractions);
+
+  // 4. Validate and return
+  return {
+    intakeFormData: IntakeFormDataSchema.parse(merged.intakeFormData),
+    clientInfo: merged.clientInfo,
+  };
+}
+```
+
+### Transcript Upload Flow (Updated)
 1. Lawyer navigates to matter detail page
-2. Clicks "Upload Transcript" button
-3. File upload modal appears (supports .txt, .docx, .pdf, etc.)
-4. Transcript is uploaded and processed by AI
-5. AI extracts structured data and populates intake form fields
-6. Lawyer reviews AI-generated content and makes manual edits as needed
+2. Clicks "Upload Transcript" or uses "Add Matter → From Transcript"
+3. File upload modal accepts JSON transcript file
+4. **Client-side**: Parse JSON to validate format
+5. **Server-side**:
+   - Store raw transcript (optional: for re-processing)
+   - Chunk transcript with overlap
+   - Process each chunk through LLM
+   - Merge extractions
+   - Populate intake form fields
+6. **UI shows progress**: "Processing chunk 1 of 3...", "Merging results...", "Complete!"
+7. Lawyer reviews AI-generated content and makes manual edits as needed
+
+### File Structure (Phase II Additions)
+
+```
+lib/
+  ai/
+    chunker.ts           - Transcript chunking logic with overlap
+    token-estimator.ts   - Token counting utilities
+    extractor.ts         - LLM extraction using AI SDK
+    merger.ts            - Multi-chunk result merging
+    prompts.ts           - System/user prompt templates
+
+app/actions/
+  transcript.ts          - Server actions for transcript processing
+
+components/
+  transcript-upload.tsx  - Upload UI with progress indicator
+  extraction-preview.tsx - Preview AI-extracted data before applying
+```
+
+### Configuration
+
+```typescript
+// lib/ai/config.ts
+export const AI_CONFIG = {
+  MAX_CHUNK_TOKENS: 30000,        // Safe limit under most LLM windows
+  OVERLAP_TOKENS: 2000,           // ~7% overlap for context preservation
+  ESTIMATED_TOKENS_PER_CHAR: 0.25, // Rough heuristic (4 chars = 1 token)
+  LLM_PROVIDER: 'openai',         // 'openai' | 'anthropic' | 'google'
+  MODEL: 'gpt-4o',                // Model name
+  TEMPERATURE: 0.1,               // Low temp for consistent extraction
+  MAX_RETRIES: 2,                 // Retry failed chunks
+};
+```
+
+### Error Handling & Edge Cases
+
+**Chunk Processing Failures**:
+- Retry failed chunks up to MAX_RETRIES
+- Skip chunks that fail repeatedly (log warning)
+- Continue with partial data from successful chunks
+- Flag matter as "partially processed" in UI
+
+**Merge Conflicts**:
+- Log conflicts for user review
+- Use configurable merge strategy (latest-wins, earliest-wins, manual)
+- Highlight conflicting fields in UI
+
+**Invalid JSON Output**:
+- Use AI SDK's built-in schema validation
+- Retry with stronger prompt if validation fails
+- Fallback to null/default values for invalid fields
+
+**Empty/Missing Data**:
+- Distinguish between "not mentioned" (null) and "extraction failed" (error state)
+- Show extraction confidence scores per field (future enhancement)
+
+**Token Limit Edge Cases**:
+- If single speaker turn exceeds MAX_CHUNK_TOKENS, hard-cut mid-turn
+- Log warning when this occurs
+- Consider increasing chunk size or using larger context model
 
 ### Data Sources & Audit Trail
 The system needs to track the origin and modification history of intake form data:
@@ -476,15 +850,198 @@ The system needs to track the origin and modification history of intake form dat
 - Field-level "accept AI suggestion" vs "keep manual entry"
 - Bulk accept/reject for AI suggestions
 
-### Database Schema Enhancements (Future)
+### Database Schema for Transcripts and Citations
 
-To support audit trail and AI integration, the following schema changes will be needed:
+To support transcript storage and turn-level citations, we need dedicated tables:
 
-**Enhanced Intake Form Data**:
-- Add `last_ai_processed_at` timestamp to track when AI last populated fields
-- Add `last_manual_edit_at` timestamp to track manual edits
-- Add `data_source` field to track predominant source ('ai_generated', 'manual_entry', 'mixed')
-- Store transcript content/metadata directly in matter or intake_form_data (no separate table needed initially)
+#### Transcripts Table
+Stores the raw transcript JSON associated with each matter.
+
+**Table Name**: `transcripts`
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PRIMARY KEY, AUTO INCREMENT | Unique identifier for the transcript |
+| matter_id | INTEGER | FOREIGN KEY → matters(id), NOT NULL | Associated matter |
+| content | TEXT | NOT NULL | Raw JSON transcript content |
+| uploaded_at | INTEGER | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Unix timestamp of upload |
+
+**Notes**:
+- One-to-one relationship with matters (each matter can have one transcript)
+- Stores the entire JSON transcript as uploaded
+- Content stored as TEXT (JSON string) for SQLite compatibility
+
+#### Turns Table
+Stores individual segments (turns) from the transcript with unique IDs for citation purposes.
+
+**Table Name**: `turns`
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PRIMARY KEY, AUTO INCREMENT | Unique identifier for the turn |
+| transcript_id | INTEGER | FOREIGN KEY → transcripts(id), NOT NULL | Associated transcript |
+| turn_index | INTEGER | NOT NULL | Sequential index in transcript (0-based) |
+| speaker | INTEGER | NOT NULL | Speaker identifier from JSON |
+| content | TEXT | NOT NULL | Spoken text content |
+
+**Notes**:
+- One-to-many relationship with transcripts (transcript has many turns)
+- `turn_index` preserves original order from the segments array
+- Each turn can be individually cited
+- Composite index on (transcript_id, turn_index) for fast lookup
+
+#### Citations in Intake Form Data
+
+To track which turns contributed to each extracted field, we'll extend the JSON structures with citation metadata:
+
+**Enhanced Liability Structure with Citations**:
+```typescript
+{
+  content: string;              // Markdown bulleted list
+  hasPoliceReport: boolean;
+  evidence?: Evidence[];
+  citations?: {
+    content?: number[];         // Turn IDs that contributed to content
+    hasPoliceReport?: number[]; // Turn IDs that mentioned police report
+  };
+}
+```
+
+**Enhanced Damages Structure with Citations**:
+```typescript
+{
+  severity: 'low' | 'medium' | 'high';
+  indications: Indication[];    // Each indication can have turn citations
+  citations?: {
+    severity?: number[];        // Turn IDs that informed severity assessment
+  };
+}
+
+type Indication = {
+  description: string;
+  severity: 'low' | 'medium' | 'high';
+  evidence?: Evidence[];
+  citations?: number[];         // Turn IDs for this specific indication
+}
+```
+
+**Enhanced Coverage Structure with Citations**:
+```typescript
+{
+  // ... all existing coverage fields
+  citations?: {
+    clientHasInsurance?: number[];
+    clientInsuranceProvider?: number[];
+    clientPolicyNumber?: number[];
+    otherPartyHasInsurance?: number[];
+    // ... citation arrays for each field
+  };
+}
+```
+
+**Enhanced Client Info Structure** (on Matter):
+Citations stored in a separate JSON field on the matter table:
+```typescript
+{
+  clientName?: number[];
+  clientDob?: number[];
+  clientPhone?: number[];
+  clientEmail?: number[];
+  clientAddress?: number[];
+  incidentDate?: number[];
+  incidentLocation?: number[];
+  caseType?: number[];
+}
+```
+
+#### Relationships
+
+```
+matters (1) ←→ (0..1) transcripts
+transcripts (1) ←→ (many) turns
+matters (1) ←→ (1) intake_form_data
+```
+
+- **One-to-One**: Each matter can have one transcript (nullable)
+- **One-to-Many**: Each transcript has many turns (segments)
+- **Citation References**: Turn IDs are stored in JSON metadata within extracted fields
+
+### Transcript Viewer UI
+
+The matter detail page will include a beautifully formatted transcript viewer:
+
+**Design Principles**:
+- Color-coded speakers for easy visual distinction
+- Clean, readable typography with comfortable line height
+- Alternating subtle backgrounds for speaker changes
+- Speaker labels with distinct visual treatment
+- Scrollable container with fixed height
+- Click-to-cite functionality (future: click a turn to see what data it contributed to)
+
+**Color Scheme**:
+- Speaker 0: Blue accent (e.g., `bg-blue-50`, `text-blue-700`)
+- Speaker 1: Green accent (e.g., `bg-green-50`, `text-green-700`)
+- Speaker 2: Purple accent (e.g., `bg-purple-50`, `text-purple-700`)
+- Additional speakers: Cycle through color palette
+
+**Layout**:
+```
+┌─────────────────────────────────────────┐
+│ Raw Transcript                          │
+│ ─────────────────────────────────────── │
+│                                         │
+│ 🔵 Speaker 0                            │
+│ Good afternoon, Ms. Harris. This is...  │
+│                                         │
+│ 🟢 Speaker 1                            │
+│ Hi Anthony, I'm managing alright...     │
+│                                         │
+│ 🔵 Speaker 0                            │
+│ Of course! Carson & Pine has been...    │
+│                                         │
+└─────────────────────────────────────────┘
+```
+
+**Citation Hover Effect** (future enhancement):
+- When hovering over a turn, highlight which extracted fields it contributed to
+- When hovering over an extracted field, highlight the source turns in the transcript
+
+### Apple-Quality Citation UI
+
+Citations will be displayed inline with extracted data fields using subtle, elegant indicators:
+
+**Citation Badge Design**:
+- Small, rounded badge with turn count: "📄 2 sources"
+- On hover: Expandable tooltip showing excerpts from cited turns
+- Click: Scrolls transcript viewer to first cited turn
+- Color-coded to match turn speaker colors
+
+**Example UI for Liability Field**:
+```
+┌────────────────────────────────────────────┐
+│ Liability                    📄 5 sources  │
+│ ──────────────────────────────────────────│
+│ - Client was driving south on Main St...  │
+│ - Defendant ran red light at...           │
+│                                            │
+│ Police Report: ✓ Yes          📄 1 source │
+└────────────────────────────────────────────┘
+```
+
+**Citation Tooltip**:
+```
+┌──────────────────────────────────────┐
+│ Sources for this information:        │
+├──────────────────────────────────────┤
+│ 🔵 Speaker 0 (Turn 3)                │
+│ "The light was clearly red when..."  │
+│                                      │
+│ 🟢 Speaker 1 (Turn 5)                │
+│ "I was going about 35 mph when..."   │
+│                                      │
+│ [View in transcript →]               │
+└──────────────────────────────────────┘
+```
 
 **Field-Level Metadata Table** (for granular audit trail):
 ```sql
@@ -500,8 +1057,6 @@ CREATE TABLE field_changes (
   FOREIGN KEY (intake_form_data_id) REFERENCES intake_form_data(id)
 );
 ```
-
-**Note**: Transcript files will be stored as uploaded files with metadata tracked in the matter or intake form data, rather than a dedicated transcripts table. This keeps the initial implementation simpler while still supporting the core workflow.
 
 ### AI Processing Architecture (Planned)
 

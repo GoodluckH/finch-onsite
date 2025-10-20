@@ -43,6 +43,29 @@ export const matters = sqliteTable("matters", {
     .notNull()
     .unique()
     .references(() => intakeFormData.id),
+  citations: text("citations", { mode: "json" }), // JSON object mapping fields to turn IDs
+});
+
+export const transcripts = sqliteTable("transcripts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  matterId: integer("matter_id")
+    .notNull()
+    .unique()
+    .references(() => matters.id),
+  content: text("content", { mode: "json" }).notNull(), // Raw JSON transcript
+  uploadedAt: integer("uploaded_at", { mode: "timestamp" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
+export const turns = sqliteTable("turns", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  transcriptId: integer("transcript_id")
+    .notNull()
+    .references(() => transcripts.id),
+  turnIndex: integer("turn_index").notNull(), // Sequential index in transcript (0-based)
+  speaker: integer("speaker").notNull(), // Speaker identifier from JSON
+  content: text("content").notNull(), // Spoken text content
 });
 
 // Relations
@@ -51,11 +74,30 @@ export const mattersRelations = relations(matters, ({ one }) => ({
     fields: [matters.intakeFormDataId],
     references: [intakeFormData.id],
   }),
+  transcript: one(transcripts, {
+    fields: [matters.id],
+    references: [transcripts.matterId],
+  }),
 }));
 
 export const intakeFormDataRelations = relations(intakeFormData, ({ one }) => ({
   matter: one(matters, {
     fields: [intakeFormData.id],
     references: [matters.intakeFormDataId],
+  }),
+}));
+
+export const transcriptsRelations = relations(transcripts, ({ one, many }) => ({
+  matter: one(matters, {
+    fields: [transcripts.matterId],
+    references: [matters.id],
+  }),
+  turns: many(turns),
+}));
+
+export const turnsRelations = relations(turns, ({ one }) => ({
+  transcript: one(transcripts, {
+    fields: [turns.transcriptId],
+    references: [transcripts.id],
   }),
 }));

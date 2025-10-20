@@ -325,6 +325,11 @@ export function MatterDetailView({
         <div className="divide-y">
           {/* Liability Section */}
           <Section title="Liability">
+            {!isEditing && (
+              <div className="mb-2 text-xs text-gray-500 italic">
+                💡 Citations will appear here when transcript is processed with turn tracking
+              </div>
+            )}
             {isEditing ? (
               <div className="space-y-2">
                 <Label className="text-xs">Liability Content (Markdown)</Label>
