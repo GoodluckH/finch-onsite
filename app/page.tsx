@@ -1,61 +1,72 @@
-import { getUsers, createUser, deleteUser } from "./actions/users";
+import { getMatters, createMatter, deleteMatter } from "./actions/matters";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import Link from "next/link";
 
 export default async function Home() {
-  const users = await getUsers();
+  const matters = await getMatters();
 
   return (
-    <div className="container mx-auto p-8 max-w-4xl">
-      <h1 className="text-3xl font-bold mb-8">User Management</h1>
-
-      <div className="mb-8 p-6 border rounded-lg">
-        <h2 className="text-xl font-semibold mb-4">Add New User</h2>
-        <form action={createUser} className="space-y-4">
-          <div>
-            <Label htmlFor="firstName">First Name</Label>
-            <Input id="firstName" name="firstName" required />
+    <div className="container mx-auto p-6 max-w-6xl">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-semibold">Matters</h1>
+        <form action={createMatter} className="flex gap-2 items-end">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="name" className="text-xs">
+              Matter Name
+            </Label>
+            <Input
+              id="name"
+              name="name"
+              placeholder="Enter matter name"
+              className="h-8 text-sm"
+              required
+            />
           </div>
-          <div>
-            <Label htmlFor="lastName">Last Name</Label>
-            <Input id="lastName" name="lastName" required />
-          </div>
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required />
-          </div>
-          <Button type="submit">Add User</Button>
+          <Button type="submit" size="sm">
+            Add Matter
+          </Button>
         </form>
       </div>
 
-      <div>
-        <h2 className="text-xl font-semibold mb-4">Users</h2>
-        {users.length === 0 ? (
-          <p className="text-muted-foreground">No users yet. Add one above!</p>
-        ) : (
-          <div className="space-y-2">
-            {users.map((user) => (
-              <div
-                key={user.id}
-                className="flex items-center justify-between p-4 border rounded-lg"
-              >
-                <div>
-                  <p className="font-medium">
-                    {user.firstName} {user.lastName}
+      {matters.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          No matters yet. Add one above.
+        </p>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {matters.map((matter) => (
+            <div
+              key={matter.id}
+              className="border rounded-md p-3 hover:border-gray-400 transition-colors"
+            >
+              <div className="flex items-start justify-between mb-2">
+                <Link
+                  href={`/matters/${matter.id}`}
+                  className="flex-1 min-w-0"
+                >
+                  <h3 className="font-medium text-sm truncate hover:text-blue-600">
+                    {matter.name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {new Date(matter.createdAt).toLocaleDateString()}
                   </p>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
-                </div>
-                <form action={deleteUser.bind(null, user.id)}>
-                  <Button variant="destructive" size="sm">
+                </Link>
+                <form action={deleteMatter.bind(null, matter.id)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 px-2 text-xs"
+                  >
                     Delete
                   </Button>
                 </form>
               </div>
-            ))}
-          </div>
-        )}
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
