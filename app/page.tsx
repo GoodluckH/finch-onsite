@@ -1,7 +1,6 @@
-import { getMatters, createMatter, deleteMatter } from "./actions/matters";
+import { getMatters, deleteMatter } from "./actions/matters";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { CreateMatterDialog } from "@/components/create-matter-dialog";
 import Link from "next/link";
 
 export default async function Home() {
@@ -11,23 +10,7 @@ export default async function Home() {
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold">Matters</h1>
-        <form action={createMatter} className="flex gap-2 items-end">
-          <div className="flex flex-col gap-1">
-            <Label htmlFor="name" className="text-xs">
-              Matter Name
-            </Label>
-            <Input
-              id="name"
-              name="name"
-              placeholder="Enter matter name"
-              className="h-8 text-sm"
-              required
-            />
-          </div>
-          <Button type="submit" size="sm">
-            Add Matter
-          </Button>
-        </form>
+        <CreateMatterDialog />
       </div>
 
       {matters.length === 0 ? (

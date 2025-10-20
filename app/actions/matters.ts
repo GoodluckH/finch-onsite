@@ -39,9 +39,7 @@ export async function getMatter(id: number) {
   return result[0] || null;
 }
 
-export async function createMatter(formData: FormData) {
-  const name = formData.get("name") as string;
-
+export async function createMatter(name: string) {
   // Create default intake form data
   const defaultLiability: Liability = {
     content: "",
@@ -63,12 +61,16 @@ export async function createMatter(formData: FormData) {
     })
     .returning();
 
-  await db.insert(matters).values({
-    name,
-    intakeFormDataId: newIntakeForm.id,
-  });
+  const [newMatter] = await db
+    .insert(matters)
+    .values({
+      name,
+      intakeFormDataId: newIntakeForm.id,
+    })
+    .returning();
 
   revalidatePath("/");
+  return newMatter.id;
 }
 
 export async function deleteMatter(id: number) {
