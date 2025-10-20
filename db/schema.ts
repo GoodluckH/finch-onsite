@@ -13,11 +13,26 @@ export const intakeFormData = sqliteTable("intake_form_data", {
   caseType: text("case_type").notNull(), // 'dog_bites' | 'mva' | 'slip_and_fall'
   liability: text("liability", { mode: "json" }).notNull(),
   damages: text("damages", { mode: "json" }).notNull(),
+  coverage: text("coverage", { mode: "json" })
+    .notNull()
+    .$defaultFn(() => ({
+      clientHasInsurance: null,
+      otherPartyHasInsurance: null,
+      medicalCoverageAvailable: null,
+      underinsuredMotoristCoverage: null,
+    })),
 });
 
 export const matters = sqliteTable("matters", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
+  clientName: text("client_name"),
+  clientDob: text("client_dob"),
+  clientPhone: text("client_phone"),
+  clientEmail: text("client_email"),
+  clientAddress: text("client_address"),
+  incidentDate: text("incident_date"),
+  incidentLocation: text("incident_location"),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .$defaultFn(() => new Date()),

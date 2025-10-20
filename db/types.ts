@@ -32,18 +32,51 @@ export type Damages = {
   indications: Indication[];
 };
 
+// Coverage (Insurance Information)
+export type Coverage = {
+  clientHasInsurance: boolean | null;
+  clientInsuranceProvider?: string;
+  clientPolicyNumber?: string;
+  clientCoverageEffectiveDate?: string;
+  clientCoverageExpirationDate?: string;
+  clientCoverageDetails?: string;
+
+  otherPartyHasInsurance: boolean | null;
+  otherPartyInsuranceProvider?: string;
+  otherPartyPolicyNumber?: string;
+  otherPartyCoverageEffectiveDate?: string;
+  otherPartyCoverageExpirationDate?: string;
+  otherPartyCoverageDetails?: string;
+
+  medicalCoverageAvailable: boolean | null;
+  medicalCoverageDetails?: string;
+
+  underinsuredMotoristCoverage: boolean | null;
+  policyLimits?: string;
+
+  notes?: string;
+};
+
 // Intake Form Data
 export type IntakeFormData = {
   id: number;
   caseType: CaseType;
   liability: Liability;
   damages: Damages;
+  coverage: Coverage;
 };
 
 // Matter
 export type Matter = {
   id: number;
   name: string;
+  clientName?: string | null;
+  clientDob?: string | null;
+  clientPhone?: string | null;
+  clientEmail?: string | null;
+  clientAddress?: string | null;
+  incidentDate?: string | null;
+  incidentLocation?: string | null;
   createdAt: Date;
   updatedAt: Date;
   intakeFormDataId: number;
@@ -59,9 +92,17 @@ export type CreateIntakeFormData = {
   caseType: CaseType;
   liability: Liability;
   damages: Damages;
+  coverage: Coverage;
 };
 
 export type CreateMatter = {
   name: string;
   intakeFormData: CreateIntakeFormData;
+  clientName?: string;
+  clientDob?: string;
+  clientPhone?: string;
+  clientEmail?: string;
+  clientAddress?: string;
+  incidentDate?: string;
+  incidentLocation?: string;
 };

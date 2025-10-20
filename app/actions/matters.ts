@@ -4,13 +4,14 @@ import { db } from "@/db";
 import { matters, intakeFormData } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import type { Liability, Damages } from "@/db/types";
+import type { Liability, Damages, Coverage } from "@/db/types";
 
 export async function getMatters() {
   return await db
     .select({
       id: matters.id,
       name: matters.name,
+      clientName: matters.clientName,
       createdAt: matters.createdAt,
       updatedAt: matters.updatedAt,
     })
@@ -22,6 +23,13 @@ export async function getMatter(id: number) {
     .select({
       id: matters.id,
       name: matters.name,
+      clientName: matters.clientName,
+      clientDob: matters.clientDob,
+      clientPhone: matters.clientPhone,
+      clientEmail: matters.clientEmail,
+      clientAddress: matters.clientAddress,
+      incidentDate: matters.incidentDate,
+      incidentLocation: matters.incidentLocation,
       createdAt: matters.createdAt,
       updatedAt: matters.updatedAt,
       intakeFormData: {
@@ -29,6 +37,7 @@ export async function getMatter(id: number) {
         caseType: intakeFormData.caseType,
         liability: intakeFormData.liability,
         damages: intakeFormData.damages,
+        coverage: intakeFormData.coverage,
       },
     })
     .from(matters)
@@ -52,12 +61,20 @@ export async function createMatter(name: string) {
     indications: [],
   };
 
+  const defaultCoverage = {
+    clientHasInsurance: null,
+    otherPartyHasInsurance: null,
+    medicalCoverageAvailable: null,
+    underinsuredMotoristCoverage: null,
+  };
+
   const [newIntakeForm] = await db
     .insert(intakeFormData)
     .values({
       caseType: "mva",
       liability: defaultLiability,
       damages: defaultDamages,
+      coverage: defaultCoverage,
     })
     .returning();
 
@@ -99,6 +116,7 @@ export async function updateIntakeFormData(
     caseType: string;
     liability: Liability;
     damages: Damages;
+    coverage: Coverage;
   }
 ) {
   await db
@@ -107,8 +125,27 @@ export async function updateIntakeFormData(
       caseType: data.caseType,
       liability: data.liability,
       damages: data.damages,
+      coverage: data.coverage,
     })
     .where(eq(intakeFormData.id, id));
+
+  revalidatePath("/matters/[id]");
+}
+
+export async function updateMatter(
+  id: number,
+  data: {
+    name?: string;
+    clientName?: string;
+    clientDob?: string;
+    clientPhone?: string;
+    clientEmail?: string;
+    clientAddress?: string;
+    incidentDate?: string;
+    incidentLocation?: string;
+  }
+) {
+  await db.update(matters).set(data).where(eq(matters.id, id));
 
   revalidatePath("/matters/[id]");
 }
