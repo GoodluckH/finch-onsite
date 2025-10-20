@@ -1,5 +1,5 @@
 import { getMatter } from "@/app/actions/matters";
-import { IntakeFormEditor } from "@/components/intake-form-editor";
+import { MatterDetailView } from "@/components/matter-detail-view";
 import { MatterPageClient } from "@/components/matter-page-client";
 import { notFound } from "next/navigation";
 
@@ -17,12 +17,14 @@ export default async function MatterPage({
 
   return (
     <MatterPageClient matter={matter}>
-      <IntakeFormEditor
+      <MatterDetailView
+        matter={matter}
         intakeFormDataId={matter.intakeFormData.id}
-        initialData={{
+        initialIntakeData={{
           caseType: matter.intakeFormData.caseType as string,
           liability: matter.intakeFormData.liability as any,
           damages: matter.intakeFormData.damages as any,
+          coverage: matter.intakeFormData.coverage as any,
         }}
       />
     </MatterPageClient>

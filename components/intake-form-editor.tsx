@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { Liability, Damages, Indication } from "@/db/types";
+import type { Liability, Damages, Indication, Coverage } from "@/db/types";
 import { updateIntakeFormData } from "@/app/actions/matters";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -23,16 +23,22 @@ type IntakeFormEditorProps = {
     caseType: string;
     liability: Liability;
     damages: Damages;
+    coverage: Coverage;
   };
+  onSaveComplete?: () => void;
+  onChangeDetected?: () => void;
 };
 
 export function IntakeFormEditor({
   intakeFormDataId,
   initialData,
+  onSaveComplete,
+  onChangeDetected,
 }: IntakeFormEditorProps) {
   const [caseType, setCaseType] = useState(initialData.caseType);
   const [liability, setLiability] = useState<Liability>(initialData.liability);
   const [damages, setDamages] = useState<Damages>(initialData.damages);
+  const [coverage, setCoverage] = useState<Coverage>(initialData.coverage);
   const [isSaving, setIsSaving] = useState(false);
   const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -42,9 +48,13 @@ export function IntakeFormEditor({
     const isDirty =
       caseType !== initialData.caseType ||
       JSON.stringify(liability) !== JSON.stringify(initialData.liability) ||
-      JSON.stringify(damages) !== JSON.stringify(initialData.damages);
+      JSON.stringify(damages) !== JSON.stringify(initialData.damages) ||
+      JSON.stringify(coverage) !== JSON.stringify(initialData.coverage);
     setHasUnsavedChanges(isDirty);
-  }, [caseType, liability, damages, initialData]);
+    if (isDirty && onChangeDetected) {
+      onChangeDetected();
+    }
+  }, [caseType, liability, damages, coverage, initialData, onChangeDetected]);
 
   // Warn on page unload
   useEffect(() => {
@@ -66,8 +76,12 @@ export function IntakeFormEditor({
         caseType,
         liability,
         damages,
+        coverage,
       });
       setHasUnsavedChanges(false);
+      if (onSaveComplete) {
+        onSaveComplete();
+      }
     } finally {
       setIsSaving(false);
     }
@@ -305,6 +319,257 @@ export function IntakeFormEditor({
               ))}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Coverage Section */}
+      <div className="border rounded-md p-3 space-y-3">
+        <h3 className="text-xs font-semibold text-gray-700">
+          Insurance Coverage
+        </h3>
+
+        {/* Client Insurance */}
+        <div className="space-y-2">
+          <Label className="text-xs font-medium">Client Insurance</Label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setCoverage({ ...coverage, clientHasInsurance: true })
+              }
+              className={`flex-1 px-2 py-1 text-xs border rounded ${
+                coverage.clientHasInsurance === true
+                  ? "bg-blue-50 border-blue-500 text-blue-700"
+                  : "bg-white"
+              }`}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setCoverage({ ...coverage, clientHasInsurance: false })
+              }
+              className={`flex-1 px-2 py-1 text-xs border rounded ${
+                coverage.clientHasInsurance === false
+                  ? "bg-blue-50 border-blue-500 text-blue-700"
+                  : "bg-white"
+              }`}
+            >
+              No
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setCoverage({ ...coverage, clientHasInsurance: null })
+              }
+              className={`flex-1 px-2 py-1 text-xs border rounded ${
+                coverage.clientHasInsurance === null
+                  ? "bg-blue-50 border-blue-500 text-blue-700"
+                  : "bg-white"
+              }`}
+            >
+              Unknown
+            </button>
+          </div>
+        </div>
+
+        {coverage.clientHasInsurance && (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs">Insurance Provider</Label>
+              <Input
+                value={coverage.clientInsuranceProvider || ""}
+                onChange={(e) =>
+                  setCoverage({
+                    ...coverage,
+                    clientInsuranceProvider: e.target.value,
+                  })
+                }
+                className="h-8 text-sm"
+                placeholder="e.g., State Farm, Geico"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Policy Number</Label>
+              <Input
+                value={coverage.clientPolicyNumber || ""}
+                onChange={(e) =>
+                  setCoverage({
+                    ...coverage,
+                    clientPolicyNumber: e.target.value,
+                  })
+                }
+                className="h-8 text-sm"
+                placeholder="Policy number"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Effective Date</Label>
+                <Input
+                  type="date"
+                  value={coverage.clientCoverageEffectiveDate || ""}
+                  onChange={(e) =>
+                    setCoverage({
+                      ...coverage,
+                      clientCoverageEffectiveDate: e.target.value,
+                    })
+                  }
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Expiration Date</Label>
+                <Input
+                  type="date"
+                  value={coverage.clientCoverageExpirationDate || ""}
+                  onChange={(e) =>
+                    setCoverage({
+                      ...coverage,
+                      clientCoverageExpirationDate: e.target.value,
+                    })
+                  }
+                  className="h-8 text-sm"
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Other Party Insurance */}
+        <div className="space-y-2 pt-2 border-t">
+          <Label className="text-xs font-medium">Other Party Insurance</Label>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                setCoverage({ ...coverage, otherPartyHasInsurance: true })
+              }
+              className={`flex-1 px-2 py-1 text-xs border rounded ${
+                coverage.otherPartyHasInsurance === true
+                  ? "bg-blue-50 border-blue-500 text-blue-700"
+                  : "bg-white"
+              }`}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setCoverage({ ...coverage, otherPartyHasInsurance: false })
+              }
+              className={`flex-1 px-2 py-1 text-xs border rounded ${
+                coverage.otherPartyHasInsurance === false
+                  ? "bg-blue-50 border-blue-500 text-blue-700"
+                  : "bg-white"
+              }`}
+            >
+              No
+            </button>
+            <button
+              type="button"
+              onClick={() =>
+                setCoverage({ ...coverage, otherPartyHasInsurance: null })
+              }
+              className={`flex-1 px-2 py-1 text-xs border rounded ${
+                coverage.otherPartyHasInsurance === null
+                  ? "bg-blue-50 border-blue-500 text-blue-700"
+                  : "bg-white"
+              }`}
+            >
+              Unknown
+            </button>
+          </div>
+        </div>
+
+        {coverage.otherPartyHasInsurance && (
+          <>
+            <div className="space-y-1">
+              <Label className="text-xs">Insurance Provider</Label>
+              <Input
+                value={coverage.otherPartyInsuranceProvider || ""}
+                onChange={(e) =>
+                  setCoverage({
+                    ...coverage,
+                    otherPartyInsuranceProvider: e.target.value,
+                  })
+                }
+                className="h-8 text-sm"
+                placeholder="e.g., State Farm, Geico"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Policy Number</Label>
+              <Input
+                value={coverage.otherPartyPolicyNumber || ""}
+                onChange={(e) =>
+                  setCoverage({
+                    ...coverage,
+                    otherPartyPolicyNumber: e.target.value,
+                  })
+                }
+                className="h-8 text-sm"
+                placeholder="Policy number"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Effective Date</Label>
+                <Input
+                  type="date"
+                  value={coverage.otherPartyCoverageEffectiveDate || ""}
+                  onChange={(e) =>
+                    setCoverage({
+                      ...coverage,
+                      otherPartyCoverageEffectiveDate: e.target.value,
+                    })
+                  }
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Expiration Date</Label>
+                <Input
+                  type="date"
+                  value={coverage.otherPartyCoverageExpirationDate || ""}
+                  onChange={(e) =>
+                    setCoverage({
+                      ...coverage,
+                      otherPartyCoverageExpirationDate: e.target.value,
+                    })
+                  }
+                  className="h-8 text-sm"
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Policy Limits */}
+        <div className="space-y-1 pt-2 border-t">
+          <Label className="text-xs">Policy Limits</Label>
+          <Input
+            value={coverage.policyLimits || ""}
+            onChange={(e) =>
+              setCoverage({ ...coverage, policyLimits: e.target.value })
+            }
+            className="h-8 text-sm"
+            placeholder="e.g., 100/300, 25/50"
+          />
+        </div>
+
+        {/* Coverage Notes */}
+        <div className="space-y-1">
+          <Label className="text-xs">Additional Notes</Label>
+          <Textarea
+            value={coverage.notes || ""}
+            onChange={(e) =>
+              setCoverage({ ...coverage, notes: e.target.value })
+            }
+            className="min-h-[50px] text-sm"
+            placeholder="Additional coverage information..."
+          />
         </div>
       </div>
     </div>
