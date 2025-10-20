@@ -3,6 +3,21 @@
 ## Overview
 This document outlines the complete system design for a legal intake form system that allows lawyers to capture and manage client information for legal matters derived from transcript calls. This is a B2B product designed for professional legal workflows with emphasis on dense, efficient UI/UX.
 
+### Core Workflow
+The system is designed to help lawyers decide whether to retain a client based on structured intake form data. The primary workflow involves:
+
+1. **Matter Creation**: Lawyer creates a new matter for a potential client
+2. **Transcript Upload**: Lawyer uploads a raw transcript of their conversation with the client (future feature)
+3. **AI-Powered Extraction**: AI automatically populates the intake form from the transcript (future feature)
+4. **Manual Review & Editing**: Lawyer reviews and edits AI-generated content as needed
+5. **Retention Decision**: Lawyer makes an informed decision based on complete intake form data
+
+This workflow supports two primary scenarios:
+- **Transcript-First**: Create matter → upload transcript → AI populates form → manual review/edits
+- **Manual-First**: Create matter → manually enter data → optionally upload transcript to overwrite/enhance
+
+The system must track changes to support auditing of manual overwrites versus AI-generated content.
+
 ## Technology Stack
 
 ### Backend
@@ -18,6 +33,7 @@ This document outlines the complete system design for a legal intake form system
 - **UI Components**: Radix UI primitives (shadcn/ui)
 - **Forms**: React Hook Form + Zod resolvers
 - **Type Safety**: TypeScript 5
+- **Markdown Rendering**: Will require markdown parser (e.g., react-markdown, marked) for liability content display
 
 ### File Structure
 - `db/schema.ts` - Drizzle schema definitions
@@ -85,7 +101,7 @@ Stores liability information for the legal matter.
 **Structure**:
 ```typescript
 {
-  content: string;              // Required - String description of liabilities
+  content: string;              // Required - Markdown-formatted string (typically bulleted lists)
   hasPoliceReport: boolean;     // Required - Whether a police report exists
   evidence?: Evidence[];        // Optional - Array of evidence items
 }
@@ -99,6 +115,19 @@ type Evidence = {
   url?: string;
 }
 ```
+
+**Content Field Format**:
+- The `content` field stores **markdown-formatted text**
+- Typically structured as bulleted lists for clarity
+- AI will generate content in markdown format from transcript analysis
+- Frontend must render markdown properly (requires markdown parser)
+- Example:
+  ```markdown
+  - Client was driving south on Main St at approximately 35mph
+  - Defendant ran red light at intersection of Main St and 5th Ave
+  - Weather conditions were clear, no visibility issues
+  - Client had right of way at time of collision
+  ```
 
 #### Damages Field (JSONB-like)
 Stores damage assessment information for the legal matter.
@@ -147,12 +176,12 @@ matters (1) ←→ (1) intake_form_data
 
 ### 4. Implementation Decisions
 1. ~~**Cascade Behavior**: What should happen to `intake_form_data` when a `matter` is deleted?~~ ✅ Manual cascade in server actions
-2. ~~**Liability Structure**: What fields should the liability JSON contain?~~ ✅ Resolved
+2. ~~**Liability Structure**: What fields should the liability JSON contain?~~ ✅ Resolved (markdown-formatted content)
 3. ~~**Damages Structure**: What fields should the damages JSON contain?~~ ✅ Resolved
 4. **Evidence Structure**: Placeholder type with id, type, description, url (optional fields)
 5. ~~**Validation**: Should case_type validation be at DB level (CHECK constraint) or app level only?~~ ✅ App-level validation via Zod
 6. **Soft Deletes**: Not implemented (hard deletes for now)
-7. **Audit Trail**: Basic timestamps only (created_at, updated_at on matters)
+7. **Audit Trail**: Basic timestamps only (will need enhancement for AI/manual tracking)
 
 ## Implementation Status
 
@@ -177,7 +206,7 @@ matters (1) ←→ (1) intake_form_data
 ### Frontend Layer ✅
 - [x] Homepage (`app/page.tsx`)
   - Matters list in card grid layout (3 columns desktop)
-  - Inline create form (name field only)
+  - Modal dialog for creating matters (`components/create-matter-dialog.tsx`)
   - Delete button per card
   - Click-through navigation to detail page
 - [x] Matter detail page (`app/matters/[id]/page.tsx`)
@@ -191,6 +220,14 @@ matters (1) ←→ (1) intake_form_data
   - Dynamic add/remove indications
   - Client-side state management
   - Save functionality with loading state
+
+### Frontend Layer - Pending Enhancements ⏳
+- [ ] Markdown rendering for liability content field (currently plain textarea)
+- [ ] Transcript upload UI and flow
+- [ ] AI processing indicator/status
+- [ ] Change tracking and audit trail visualization
+- [ ] Diff view for AI-generated vs. manually edited content
+- [ ] Confirmation dialogs for transcript overwrites
 
 ## UI/UX Design Principles
 
@@ -260,11 +297,12 @@ Database schema with ORM mappings:
 ## Data Flow
 
 ### Creating a Matter
-1. User enters matter name in homepage form
-2. Form submits to `createMatter` server action
-3. Server creates default intake form data (MVA case, empty liability, low severity damages)
-4. Server creates matter linked to intake form
-5. Page revalidates, new matter appears in list
+1. User clicks "Add Matter" button on homepage
+2. Modal dialog appears prompting for matter name
+3. User enters name and clicks "Create Matter"
+4. Server action creates default intake form data (MVA case, empty liability, low severity damages)
+5. Server creates matter linked to intake form, returns new matter ID
+6. User is immediately redirected to the matter detail page to begin data entry
 
 ### Editing Intake Form
 1. User navigates to matter detail page
@@ -284,14 +322,136 @@ Database schema with ORM mappings:
 5. Server deletes orphaned intake form data
 6. Page revalidates, matter removed from list
 
+## AI Integration & Transcript Processing (Planned)
+
+### Transcript Upload Flow
+1. Lawyer navigates to matter detail page
+2. Clicks "Upload Transcript" button
+3. File upload modal appears (supports .txt, .docx, .pdf, etc.)
+4. Transcript is uploaded and processed by AI
+5. AI extracts structured data and populates intake form fields
+6. Lawyer reviews AI-generated content and makes manual edits as needed
+
+### Data Sources & Audit Trail
+The system needs to track the origin and modification history of intake form data:
+
+**Data Source Types**:
+- `ai_generated` - Initially populated by AI from transcript
+- `manual_entry` - Directly entered by lawyer
+- `manual_override` - AI-generated content that was manually edited
+
+**Audit Requirements**:
+- Track when data was AI-generated vs. manually entered
+- Highlight fields that have been manually overridden after AI generation
+- Show diff/comparison between AI-generated and current state
+- Timestamp each change with source attribution
+- Support "revert to AI-generated" functionality for manual overwrites
+
+### UX Considerations for AI + Manual Workflows
+
+**Scenario 1: Transcript-First**
+- Create matter → Upload transcript immediately
+- AI populates all fields
+- Visual indicators show "AI-generated" status
+- Lawyer reviews and edits as needed
+- Edited fields show "manually reviewed" badge
+
+**Scenario 2: Manual-First with Later Transcript**
+- Create matter → Manually enter some data
+- Later upload transcript
+- System shows preview/diff of what AI wants to change
+- Lawyer selects which AI suggestions to accept
+- Confirmation dialog: "This will overwrite your manual entries. Continue?"
+- Option to merge (keep manual + add AI data) vs. replace (overwrite all)
+
+**Visual Indicators Needed**:
+- Badge/icon showing data source (AI vs. Manual)
+- Color coding for modified fields (e.g., yellow for AI, green for manual, orange for override)
+- "Last edited by AI/User on [date]" timestamp
+- Change history drawer/panel
+- Diff view toggle to compare versions
+
+**Workflow Safeguards**:
+- Warning when uploading transcript to matter with existing manual data
+- Preview changes before applying AI suggestions
+- Undo/redo functionality
+- Field-level "accept AI suggestion" vs "keep manual entry"
+- Bulk accept/reject for AI suggestions
+
+### Database Schema Enhancements (Future)
+
+To support audit trail and AI integration, the following schema changes will be needed:
+
+**Field-Level Metadata Table**:
+```sql
+CREATE TABLE field_changes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  intake_form_data_id INTEGER NOT NULL,
+  field_name TEXT NOT NULL,
+  old_value TEXT,
+  new_value TEXT,
+  source_type TEXT NOT NULL, -- 'ai_generated', 'manual_entry', 'manual_override'
+  changed_by TEXT,           -- User ID (when auth is implemented)
+  changed_at INTEGER NOT NULL,
+  transcript_id INTEGER,     -- Reference to transcript that generated this change
+  FOREIGN KEY (intake_form_data_id) REFERENCES intake_form_data(id)
+);
+```
+
+**Transcripts Table**:
+```sql
+CREATE TABLE transcripts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  matter_id INTEGER NOT NULL,
+  file_name TEXT NOT NULL,
+  file_path TEXT NOT NULL,
+  file_size INTEGER,
+  uploaded_at INTEGER NOT NULL,
+  processed_at INTEGER,
+  ai_model_version TEXT,
+  processing_status TEXT, -- 'pending', 'processing', 'completed', 'failed'
+  FOREIGN KEY (matter_id) REFERENCES matters(id)
+);
+```
+
+**Enhanced Intake Form Data**:
+- Add `last_ai_processed_at` timestamp
+- Add `last_manual_edit_at` timestamp
+- Add `data_source` field to track predominant source
+
+### AI Processing Architecture (Planned)
+
+**Components**:
+- Transcript upload service (file storage)
+- AI extraction service (LLM API integration)
+- Change detection and diff service
+- Merge conflict resolution UI
+
+**AI Prompt Design**:
+- Extract case type (dog_bites, mva, slip_and_fall)
+- Extract liability information as markdown bulleted lists
+- Identify if police report was mentioned
+- Extract damage severity and specific indications
+- Structure output as JSON matching IntakeFormData schema
+
+**Error Handling**:
+- Handle ambiguous or missing information
+- Flag low-confidence extractions for manual review
+- Support partial extraction (some fields populated, others empty)
+- Allow re-processing with different AI models/prompts
+
 ## Future Considerations
-- Evidence management (file uploads, URLs, metadata)
-- Search and filtering on matters list
-- Sorting by date, name, case type
-- Pagination for large matter lists
-- Audit logging for compliance
-- User authentication and authorization
-- Export functionality (PDF, CSV)
-- Advanced validation rules per case type
-- Template system for common case scenarios
-- Integration with external legal systems
+- **Markdown editing**: Rich text editor with markdown preview for liability content
+- **Evidence management**: File uploads, URLs, metadata tracking
+- **Search and filtering**: Full-text search across matters, filter by case type, date range
+- **Sorting**: Multi-column sort on matters list (date, name, case type)
+- **Pagination**: Virtual scrolling or pagination for large matter lists
+- **Advanced audit logging**: Complete change history with user attribution
+- **User authentication**: Role-based access control (admin, lawyer, paralegal)
+- **Export functionality**: PDF reports, CSV exports for external systems
+- **Advanced validation**: Case-type-specific validation rules and required fields
+- **Template system**: Pre-filled forms for common case scenarios
+- **Integration**: External legal management systems, document storage (DocuSign, Clio, etc.)
+- **Notifications**: Email alerts for status changes, AI processing completion
+- **Collaboration**: Comments, notes, internal discussions on matters
+- **Version history**: Full rollback capability for intake form data
