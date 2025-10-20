@@ -382,7 +382,13 @@ The system needs to track the origin and modification history of intake form dat
 
 To support audit trail and AI integration, the following schema changes will be needed:
 
-**Field-Level Metadata Table**:
+**Enhanced Intake Form Data**:
+- Add `last_ai_processed_at` timestamp to track when AI last populated fields
+- Add `last_manual_edit_at` timestamp to track manual edits
+- Add `data_source` field to track predominant source ('ai_generated', 'manual_entry', 'mixed')
+- Store transcript content/metadata directly in matter or intake_form_data (no separate table needed initially)
+
+**Field-Level Metadata Table** (for granular audit trail):
 ```sql
 CREATE TABLE field_changes (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -393,31 +399,11 @@ CREATE TABLE field_changes (
   source_type TEXT NOT NULL, -- 'ai_generated', 'manual_entry', 'manual_override'
   changed_by TEXT,           -- User ID (when auth is implemented)
   changed_at INTEGER NOT NULL,
-  transcript_id INTEGER,     -- Reference to transcript that generated this change
   FOREIGN KEY (intake_form_data_id) REFERENCES intake_form_data(id)
 );
 ```
 
-**Transcripts Table**:
-```sql
-CREATE TABLE transcripts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  matter_id INTEGER NOT NULL,
-  file_name TEXT NOT NULL,
-  file_path TEXT NOT NULL,
-  file_size INTEGER,
-  uploaded_at INTEGER NOT NULL,
-  processed_at INTEGER,
-  ai_model_version TEXT,
-  processing_status TEXT, -- 'pending', 'processing', 'completed', 'failed'
-  FOREIGN KEY (matter_id) REFERENCES matters(id)
-);
-```
-
-**Enhanced Intake Form Data**:
-- Add `last_ai_processed_at` timestamp
-- Add `last_manual_edit_at` timestamp
-- Add `data_source` field to track predominant source
+**Note**: Transcript files will be stored as uploaded files with metadata tracked in the matter or intake form data, rather than a dedicated transcripts table. This keeps the initial implementation simpler while still supporting the core workflow.
 
 ### AI Processing Architecture (Planned)
 

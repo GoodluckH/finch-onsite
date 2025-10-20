@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/select";
 import type { Liability, Damages, Indication } from "@/db/types";
 import { updateIntakeFormData } from "@/app/actions/matters";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 type IntakeFormEditorProps = {
   intakeFormDataId: number;
@@ -32,6 +34,7 @@ export function IntakeFormEditor({
   const [liability, setLiability] = useState<Liability>(initialData.liability);
   const [damages, setDamages] = useState<Damages>(initialData.damages);
   const [isSaving, setIsSaving] = useState(false);
+  const [showMarkdownPreview, setShowMarkdownPreview] = useState(false);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -98,18 +101,50 @@ export function IntakeFormEditor({
 
       {/* Liability Section */}
       <div className="border rounded-md p-3 space-y-3">
-        <h3 className="text-xs font-semibold text-gray-700">Liability</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-semibold text-gray-700">Liability</h3>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowMarkdownPreview(!showMarkdownPreview)}
+            className="h-6 px-2 text-xs"
+          >
+            {showMarkdownPreview ? "Edit" : "Preview"}
+          </Button>
+        </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Content</Label>
-          <Textarea
-            value={liability.content}
-            onChange={(e) =>
-              setLiability({ ...liability, content: e.target.value })
-            }
-            className="min-h-[60px] text-sm"
-            placeholder="Describe liability..."
-          />
+          <Label className="text-xs">
+            Content{" "}
+            <span className="text-muted-foreground font-normal">
+              (Markdown supported)
+            </span>
+          </Label>
+          {showMarkdownPreview ? (
+            <div className="min-h-[60px] text-sm border rounded-md p-2 bg-gray-50">
+              {liability.content ? (
+                <div className="prose prose-sm max-w-none prose-ul:my-1 prose-li:my-0">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    {liability.content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <span className="text-muted-foreground text-xs">
+                  No content to preview
+                </span>
+              )}
+            </div>
+          ) : (
+            <Textarea
+              value={liability.content}
+              onChange={(e) =>
+                setLiability({ ...liability, content: e.target.value })
+              }
+              className="min-h-[60px] text-sm font-mono"
+              placeholder="Describe liability... (use markdown format, e.g., bulleted lists with -)&#10;&#10;Example:&#10;- Client was driving south on Main St&#10;- Defendant ran red light&#10;- Weather conditions were clear"
+            />
+          )}
         </div>
 
         <div className="flex items-center gap-2">
