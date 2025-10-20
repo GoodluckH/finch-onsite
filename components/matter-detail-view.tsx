@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { updateMatter } from "@/app/actions/matters";
 import { updateIntakeFormData } from "@/app/actions/matters";
+import { CitationBadge } from "@/components/citation-badge";
 
 type Matter = {
   id: number;
@@ -22,6 +23,7 @@ type Matter = {
   incidentDate?: string | null;
   incidentLocation?: string | null;
   brief?: string | null;
+  citations?: any; // Citations from AI extraction
   createdAt: Date;
   updatedAt: Date;
 };
@@ -35,15 +37,26 @@ type MatterDetailViewProps = {
     damages: Damages;
     coverage: Coverage;
   };
+  onCitationClick?: (turnIds: number[]) => void;
 };
 
 export function MatterDetailView({
   matter,
   intakeFormDataId,
   initialIntakeData,
+  onCitationClick,
 }: MatterDetailViewProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+  // Helper function to get turn IDs for a specific field
+  const getCitationsForField = (section: "clientInfo" | "liability" | "damages" | "coverage", field: string): number[] => {
+    let sectionCitations =  matter.citations[section] || []
+
+
+    const fieldCitation = sectionCitations.find((c: any) => c.field === field);
+    return fieldCitation?.turnIds || [];
+  };
 
   // Matter fields state
   const [clientName, setClientName] = useState(matter.clientName || "");
@@ -216,6 +229,19 @@ export function MatterDetailView({
         </div>
       </div>
 
+            {/* Case Brief Card */}
+      {brief && !isEditing && (
+        <div className="bg-blue-50 border border-blue-200 rounded-md">
+          <div className="border-b border-blue-200 px-4 py-2 bg-blue-100">
+            <h2 className="text-sm font-semibold text-blue-900">AI Case Brief</h2>
+          </div>
+          <div className="p-4">
+            <p className="text-sm text-gray-800 leading-relaxed">{brief}</p>
+          </div>
+        </div>
+      )}
+
+
       {/* Client Information Card */}
       <div className="bg-white rounded-md border">
         <div className="border-b px-4 py-2">
@@ -231,6 +257,8 @@ export function MatterDetailView({
                 markAsChanged();
               }}
               isEditing={isEditing}
+              citationTurnIds={getCitationsForField("clientInfo", "clientName")}
+              onCitationClick={onCitationClick}
             />
             <EditableField
               label="Date of Birth"
@@ -241,6 +269,8 @@ export function MatterDetailView({
               }}
               isEditing={isEditing}
               type="date"
+              citationTurnIds={getCitationsForField("clientInfo", "clientDob")}
+              onCitationClick={onCitationClick}
             />
             <EditableField
               label="Phone"
@@ -250,6 +280,8 @@ export function MatterDetailView({
                 markAsChanged();
               }}
               isEditing={isEditing}
+              citationTurnIds={getCitationsForField("clientInfo", "clientPhone")}
+              onCitationClick={onCitationClick}
             />
             <EditableField
               label="Email"
@@ -260,6 +292,8 @@ export function MatterDetailView({
               }}
               isEditing={isEditing}
               type="email"
+              citationTurnIds={getCitationsForField("clientInfo", "clientEmail")}
+              onCitationClick={onCitationClick}
             />
             <EditableField
               label="Address"
@@ -270,22 +304,13 @@ export function MatterDetailView({
               }}
               isEditing={isEditing}
               span={2}
+              citationTurnIds={getCitationsForField("clientInfo", "clientAddress")}
+              onCitationClick={onCitationClick}
             />
           </div>
         </div>
       </div>
 
-      {/* Case Brief Card */}
-      {brief && !isEditing && (
-        <div className="bg-blue-50 border border-blue-200 rounded-md">
-          <div className="border-b border-blue-200 px-4 py-2 bg-blue-100">
-            <h2 className="text-sm font-semibold text-blue-900">AI Case Brief</h2>
-          </div>
-          <div className="p-4">
-            <p className="text-sm text-gray-800 leading-relaxed">{brief}</p>
-          </div>
-        </div>
-      )}
 
       {isEditing && (
         <div className="bg-white rounded-md border">
@@ -328,6 +353,8 @@ export function MatterDetailView({
                 { value: "mva", label: "Motor Vehicle Accident" },
                 { value: "slip_and_fall", label: "Slip and Fall" },
               ]}
+              citationTurnIds={getCitationsForField("clientInfo", "caseType")}
+              onCitationClick={onCitationClick}
             />
             <EditableField
               label="Date"
@@ -338,6 +365,8 @@ export function MatterDetailView({
               }}
               isEditing={isEditing}
               type="date"
+              citationTurnIds={getCitationsForField("clientInfo", "incidentDate")}
+              onCitationClick={onCitationClick}
             />
             <EditableField
               label="Location"
@@ -347,6 +376,8 @@ export function MatterDetailView({
                 markAsChanged();
               }}
               isEditing={isEditing}
+              citationTurnIds={getCitationsForField("clientInfo", "incidentLocation")}
+              onCitationClick={onCitationClick}
             />
           </div>
         </div>
@@ -789,6 +820,8 @@ function EditableField({
   type = "text",
   span = 1,
   options,
+  citationTurnIds,
+  onCitationClick,
 }: {
   label: string;
   value: string;
@@ -797,6 +830,8 @@ function EditableField({
   type?: "text" | "email" | "date" | "select";
   span?: number;
   options?: { value: string; label: string }[];
+  citationTurnIds?: number[];
+  onCitationClick?: (turnIds: number[]) => void;
 }) {
   const className = span > 1 ? `col-span-${span}` : "";
 
@@ -838,7 +873,15 @@ function EditableField({
 
   return (
     <div className={className}>
-      <p className="text-xs text-gray-600 mb-0.5">{label}</p>
+      <div className="flex items-center gap-2 mb-0.5">
+        <p className="text-xs text-gray-600">{label}</p>
+        {citationTurnIds && citationTurnIds.length > 0 && onCitationClick && (
+          <CitationBadge
+            turnIds={citationTurnIds}
+            onClickCitation={onCitationClick}
+          />
+        )}
+      </div>
       <p className="text-sm font-medium">
         {displayValue || (
           <span className="text-gray-400 italic font-normal">Not provided</span>

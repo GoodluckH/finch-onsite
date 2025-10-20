@@ -12,7 +12,7 @@ interface Turn {
 interface CitationBadgeProps {
   turnIds?: number[];
   turns?: Turn[]; // Optional: full turn data for rich tooltips
-  onClickCitation?: (turnId: number) => void;
+  onClickCitation?: (turnIds: number[]) => void; // Now accepts array of turn IDs
 }
 
 // Color palette matching transcript viewer
@@ -48,7 +48,7 @@ export function CitationBadge({
         type="button"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
-        onClick={() => onClickCitation?.(turnIds[0])}
+        onClick={() => onClickCitation?.(turnIds)}
         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors cursor-pointer"
       >
         <svg
@@ -110,7 +110,7 @@ export function CitationBadge({
             <div className="px-3 py-2 bg-gray-50 rounded-b-lg border-t">
               <button
                 type="button"
-                onClick={() => onClickCitation(turnIds[0])}
+                onClick={() => onClickCitation(turnIds)}
                 className="text-xs text-blue-600 hover:text-blue-700 font-medium"
               >
                 View in transcript →

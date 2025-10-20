@@ -122,20 +122,22 @@ export async function processTranscriptAndCreateMatter(
     console.log(`  - Damages: ${allCitations.damages.length}`);
     console.log(`  - Coverage: ${allCitations.coverage.length}`);
 
+    const payload = {
+      clientName: extracted.clientInfo.clientName,
+      clientDob: extracted.clientInfo.clientDob,
+      clientPhone: extracted.clientInfo.clientPhone,
+      clientEmail: extracted.clientInfo.clientEmail,
+      clientAddress: extracted.clientInfo.clientAddress,
+      incidentDate: extracted.clientInfo.incidentDate,
+      incidentLocation: extracted.clientInfo.incidentLocation,
+      brief: extracted.clientInfo.brief,
+      citations: allCitations,
+    }
+    console.log("payload", payload)
     // Update matter with extracted client info
     await db
       .update(matters)
-      .set({
-        clientName: extracted.clientInfo.clientName,
-        clientDob: extracted.clientInfo.clientDob,
-        clientPhone: extracted.clientInfo.clientPhone,
-        clientEmail: extracted.clientInfo.clientEmail,
-        clientAddress: extracted.clientInfo.clientAddress,
-        incidentDate: extracted.clientInfo.incidentDate,
-        incidentLocation: extracted.clientInfo.incidentLocation,
-        brief: extracted.clientInfo.brief,
-        citations: allCitations,
-      })
+      .set(payload)
       .where(eq(matters.id, tempMatter.id));
 
     console.log(`[Server Action] ✓ Updated matter with extracted data`);

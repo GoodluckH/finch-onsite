@@ -30,6 +30,8 @@ export async function getMatter(id: number) {
       clientAddress: matters.clientAddress,
       incidentDate: matters.incidentDate,
       incidentLocation: matters.incidentLocation,
+      brief: matters.brief,
+      citations: matters.citations,
       createdAt: matters.createdAt,
       updatedAt: matters.updatedAt,
       intakeFormData: {

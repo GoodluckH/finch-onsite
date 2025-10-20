@@ -21,6 +21,12 @@ export type FaultPercentages = {
   otherParty: number; // 0-100
 };
 
+// Citation (references to turn IDs)
+export type Citation = {
+  field: string;
+  turnIds: number[];
+};
+
 // Liability
 export type Liability = {
   atFault: AtFault;
@@ -28,6 +34,7 @@ export type Liability = {
   rationale: string; // Markdown bulleted list justifying fault
   hasPoliceReport: boolean;
   evidence?: Evidence[];
+  citations?: Citation[];
 };
 
 // Indication (nested in Damages)
@@ -41,6 +48,7 @@ export type Indication = {
 export type Damages = {
   severity: Severity;
   indications: Indication[];
+  citations?: Citation[];
 };
 
 // Coverage (Insurance Information)
@@ -66,6 +74,7 @@ export type Coverage = {
   policyLimits?: string;
 
   notes?: string;
+  citations?: Citation[];
 };
 
 // Intake Form Data
