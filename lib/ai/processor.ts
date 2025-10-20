@@ -2,13 +2,17 @@ import { chunkTranscript } from "./chunker";
 import { extractFromChunkParallel, type ChunkExtraction } from "./specialized-extractor";
 import { mergeChunkExtractions } from "./specialized-merger";
 import { AI_CONFIG } from "./config";
-import type { Transcript } from "./types";
+import type { Transcript, TranscriptSegmentWithTurnId } from "./types";
 
 /**
  * Process a transcript through chunking, parallel extraction, and merging
+ *
+ * @param transcript - The transcript to process
+ * @param segmentsWithTurnIds - Optional: Segments with turn IDs for citation tracking
  */
 export async function processTranscript(
-  transcript: Transcript
+  transcript: Transcript,
+  segmentsWithTurnIds?: TranscriptSegmentWithTurnId[]
 ): Promise<ChunkExtraction> {
   console.log("\n");
   console.log("=".repeat(60));
@@ -31,22 +35,65 @@ export async function processTranscript(
       `🚀 Each chunk will spawn 4 parallel LLM calls (Client Info + Liability + Damages + Coverage)`
     );
 
+    // Map chunks to turn information (if available)
+    const chunksWithTurns: Array<{
+      chunk: string;
+      turns: Array<{ turnId: number; speaker: number; content: string }>
+    }> = [];
+
+    if (segmentsWithTurnIds && segmentsWithTurnIds.length > 0) {
+      console.log(`\n🔗 Mapping turns to chunks for citation tracking...`);
+
+      // For each chunk, figure out which turns it contains
+      // Simple approach: check which segments' text appears in the chunk
+      for (let i = 0; i < chunks.length; i++) {
+        const chunkText = chunks[i];
+        const turnsInChunk: Array<{ turnId: number; speaker: number; content: string }> = [];
+
+        for (const seg of segmentsWithTurnIds) {
+          // Check if this segment's content appears in the chunk
+          if (chunkText.includes(seg.content)) {
+            turnsInChunk.push({
+              turnId: seg.turnId,
+              speaker: seg.speaker,
+              content: seg.content,
+            });
+          }
+        }
+
+        chunksWithTurns.push({
+          chunk: chunkText,
+          turns: turnsInChunk,
+        });
+
+        console.log(
+          `  Chunk ${i + 1}: Contains ${turnsInChunk.length} turns (IDs: ${turnsInChunk.slice(0, 5).map(t => t.turnId).join(", ")}${turnsInChunk.length > 5 ? "..." : ""})`
+        );
+      }
+    } else {
+      // No turn IDs available, just use chunks as-is
+      for (const chunk of chunks) {
+        chunksWithTurns.push({ chunk, turns: [] });
+      }
+    }
+
     // Step 2: Extract from each chunk with parallel specialized calls
     console.log(
       `\n🤖 Starting parallel extraction for ${chunks.length} chunk(s)...`
     );
     const extractions: ChunkExtraction[] = [];
 
-    for (let i = 0; i < chunks.length; i++) {
+    for (let i = 0; i < chunksWithTurns.length; i++) {
       console.log(`\n${"=".repeat(50)}`);
-      console.log(`PROCESSING CHUNK ${i + 1} of ${chunks.length}`);
+      console.log(`PROCESSING CHUNK ${i + 1} of ${chunksWithTurns.length}`);
       console.log("=".repeat(50));
 
       try {
         const extraction = await extractFromChunkParallel(
-          chunks[i],
+          chunksWithTurns[i].chunk,
           i + 1,
-          chunks.length
+          chunksWithTurns.length,
+          chunksWithTurns[i].turns // Pass full turn info for citation
         );
         extractions.push(extraction);
         console.log(`✓ Chunk ${i + 1} processed successfully (4/4 extractions)`);
@@ -58,9 +105,10 @@ export async function processTranscript(
           console.log(`⟳ Retrying chunk ${i + 1}...`);
           try {
             const extraction = await extractFromChunkParallel(
-              chunks[i],
+              chunksWithTurns[i].chunk,
               i + 1,
-              chunks.length
+              chunksWithTurns.length,
+              chunksWithTurns[i].turns
             );
             extractions.push(extraction);
             console.log(`✓ Chunk ${i + 1} succeeded on retry`);
@@ -93,6 +141,7 @@ export async function processTranscript(
     console.log("PROCESSING COMPLETE - FINAL RESULTS");
     console.log("=".repeat(60));
     console.log(`Case Type: ${merged.clientInfo.caseType}`);
+    console.log(`Brief: ${merged.clientInfo.brief?.substring(0, 100) || "Not generated"}${(merged.clientInfo.brief?.length || 0) > 100 ? "..." : ""}`);
     console.log(
       `Client Name: ${merged.clientInfo.clientName || "Not extracted"}`
     );

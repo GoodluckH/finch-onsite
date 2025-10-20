@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+// Citation schema - references to turn IDs
+const CitationSchema = z.object({
+  field: z.string(), // Field name being cited (e.g., "clientName", "incidentDate")
+  turnIds: z.array(z.number()), // Turn IDs that support this field
+});
+
 // Client basic information schema
 export const ClientInfoSchema = z.object({
   caseType: z.enum(["dog_bites", "mva", "slip_and_fall"]),
@@ -11,6 +17,7 @@ export const ClientInfoSchema = z.object({
   incidentDate: z.string().nullable().optional(),
   incidentLocation: z.string().nullable().optional(),
   brief: z.string().nullable().optional(), // AI-generated case summary (5 sentences max)
+  citations: z.array(CitationSchema).optional(), // Turn IDs supporting extracted client info
 });
 
 // Liability schema
@@ -34,6 +41,7 @@ export const LiabilitySchema = z.object({
   rationale: z.string(), // Markdown bulleted list justifying fault determination
   hasPoliceReport: z.boolean(),
   evidence: z.array(EvidenceSchema).optional(),
+  citations: z.array(CitationSchema).optional(), // Turn IDs supporting liability findings
 });
 
 // Damages schema
@@ -46,6 +54,7 @@ const IndicationSchema = z.object({
 export const DamagesSchema = z.object({
   severity: z.enum(["low", "medium", "high"]),
   indications: z.array(IndicationSchema),
+  citations: z.array(CitationSchema).optional(), // Turn IDs supporting damage assessments
 });
 
 // Coverage schema
@@ -71,6 +80,7 @@ export const CoverageSchema = z.object({
   policyLimits: z.string().nullable().optional(),
 
   notes: z.string().nullable().optional(),
+  citations: z.array(CitationSchema).optional(), // Turn IDs supporting coverage information
 });
 
 export type ClientInfo = z.infer<typeof ClientInfoSchema>;

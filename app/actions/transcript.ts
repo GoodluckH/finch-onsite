@@ -83,9 +83,17 @@ export async function processTranscriptAndCreateMatter(
     );
 
     // STEP 3: NOW process transcript with AI (turns exist, so we can track citations)
-    // For now, we'll just extract data without citations
-    // TODO: Update processTranscript to accept turns and track citations
-    const extracted = await processTranscript(transcript);
+    console.log(`\n[Server Action] Processing transcript with turn citation tracking...`);
+
+    // Map created turns to segments with turn IDs
+    const segmentsWithTurnIds = createdTurns.map((turn) => ({
+      turnId: turn.id,
+      turnIndex: turn.turnIndex,
+      speaker: turn.speaker,
+      content: turn.content,
+    }));
+
+    const extracted = await processTranscript(transcript, segmentsWithTurnIds);
 
     console.log(`\n[Server Action] Updating matter with extracted data...`);
 
@@ -100,6 +108,20 @@ export async function processTranscriptAndCreateMatter(
       })
       .where(eq(intakeFormData.id, tempIntakeForm.id));
 
+    // Collect all citations from all sections
+    const allCitations = {
+      clientInfo: extracted.clientInfo.citations || [],
+      liability: extracted.liability.citations || [],
+      damages: extracted.damages.citations || [],
+      coverage: extracted.coverage.citations || [],
+    };
+
+    console.log(`[Server Action] Citations collected:`);
+    console.log(`  - Client Info: ${allCitations.clientInfo.length}`);
+    console.log(`  - Liability: ${allCitations.liability.length}`);
+    console.log(`  - Damages: ${allCitations.damages.length}`);
+    console.log(`  - Coverage: ${allCitations.coverage.length}`);
+
     // Update matter with extracted client info
     await db
       .update(matters)
@@ -112,7 +134,7 @@ export async function processTranscriptAndCreateMatter(
         incidentDate: extracted.clientInfo.incidentDate,
         incidentLocation: extracted.clientInfo.incidentLocation,
         brief: extracted.clientInfo.brief,
-        // TODO: Add citations here once extraction tracks them
+        citations: allCitations,
       })
       .where(eq(matters.id, tempMatter.id));
 

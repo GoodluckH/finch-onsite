@@ -10,6 +10,21 @@ function mergeClientInfo(infos: ClientInfo[]): ClientInfo {
   // Use first non-null value found (prefer later chunks for conflicts)
   const reversed = [...infos].reverse();
 
+  // Merge citations from all chunks
+  const allCitations = infos.flatMap((i) => i.citations || []);
+  // Combine citations for same field
+  const citationMap = new Map<string, Set<number>>();
+  for (const citation of allCitations) {
+    if (!citationMap.has(citation.field)) {
+      citationMap.set(citation.field, new Set());
+    }
+    citation.turnIds.forEach((id) => citationMap.get(citation.field)!.add(id));
+  }
+  const mergedCitations = Array.from(citationMap.entries()).map(([field, turnIds]) => ({
+    field,
+    turnIds: Array.from(turnIds).sort((a, b) => a - b),
+  }));
+
   const merged: ClientInfo = {
     caseType: reversed.find((i) => i.caseType)?.caseType || "mva",
     clientName: reversed.find((i) => i.clientName)?.clientName || null,
@@ -20,9 +35,11 @@ function mergeClientInfo(infos: ClientInfo[]): ClientInfo {
     incidentDate: reversed.find((i) => i.incidentDate)?.incidentDate || null,
     incidentLocation:
       reversed.find((i) => i.incidentLocation)?.incidentLocation || null,
+    brief: reversed.find((i) => i.brief)?.brief || null,
+    citations: mergedCitations.length > 0 ? mergedCitations : undefined,
   };
 
-  console.log(`[Merger] Client: ${merged.clientName || "N/A"}, Case: ${merged.caseType}`);
+  console.log(`[Merger] Client: ${merged.clientName || "N/A"}, Case: ${merged.caseType}, Citations: ${mergedCitations.length}`);
   return merged;
 }
 
@@ -80,12 +97,29 @@ function mergeLiability(liabilities: Liability[]): Liability {
     }
   }
 
+  // Merge citations
+  const allCitations = liabilities.flatMap((l) => l.citations || []);
+  const citationMap = new Map<string, Set<number>>();
+  for (const citation of allCitations) {
+    if (!citationMap.has(citation.field)) {
+      citationMap.set(citation.field, new Set());
+    }
+    citation.turnIds.forEach((id) => citationMap.get(citation.field)!.add(id));
+  }
+  const mergedCitations = Array.from(citationMap.entries()).map(([field, turnIds]) => ({
+    field,
+    turnIds: Array.from(turnIds).sort((a, b) => a - b),
+  }));
+
+  console.log(`[Merger] Liability citations: ${mergedCitations.length}`);
+
   return {
     atFault,
     faultPercentages,
     rationale: uniquePoints.join("\n"),
     hasPoliceReport,
     evidence: [],
+    citations: mergedCitations.length > 0 ? mergedCitations : undefined,
   };
 }
 
@@ -113,13 +147,28 @@ function mergeDamages(damages: Damages[]): Damages {
     return true;
   });
 
+  // Merge citations
+  const allCitations = damages.flatMap((d) => d.citations || []);
+  const citationMap = new Map<string, Set<number>>();
+  for (const citation of allCitations) {
+    if (!citationMap.has(citation.field)) {
+      citationMap.set(citation.field, new Set());
+    }
+    citation.turnIds.forEach((id) => citationMap.get(citation.field)!.add(id));
+  }
+  const mergedCitations = Array.from(citationMap.entries()).map(([field, turnIds]) => ({
+    field,
+    turnIds: Array.from(turnIds).sort((a, b) => a - b),
+  }));
+
   console.log(
-    `[Merger] Severity: ${severity}, Indications: ${uniqueIndications.length}`
+    `[Merger] Severity: ${severity}, Indications: ${uniqueIndications.length}, Citations: ${mergedCitations.length}`
   );
 
   return {
     severity,
     indications: uniqueIndications,
+    citations: mergedCitations.length > 0 ? mergedCitations : undefined,
   };
 }
 
@@ -128,6 +177,20 @@ function mergeDamages(damages: Damages[]): Damages {
  */
 function mergeCoverage(coverages: Coverage[]): Coverage {
   console.log(`[Merger] Merging ${coverages.length} coverage objects`);
+
+  // Merge citations
+  const allCitations = coverages.flatMap((c) => c.citations || []);
+  const citationMap = new Map<string, Set<number>>();
+  for (const citation of allCitations) {
+    if (!citationMap.has(citation.field)) {
+      citationMap.set(citation.field, new Set());
+    }
+    citation.turnIds.forEach((id) => citationMap.get(citation.field)!.add(id));
+  }
+  const mergedCitations = Array.from(citationMap.entries()).map(([field, turnIds]) => ({
+    field,
+    turnIds: Array.from(turnIds).sort((a, b) => a - b),
+  }));
 
   const merged = coverages.reduce((acc, curr) => ({
     clientHasInsurance: curr.clientHasInsurance ?? acc.clientHasInsurance,
@@ -165,8 +228,10 @@ function mergeCoverage(coverages: Coverage[]): Coverage {
       curr.underinsuredMotoristCoverage ?? acc.underinsuredMotoristCoverage,
     policyLimits: curr.policyLimits ?? acc.policyLimits,
     notes: curr.notes ?? acc.notes,
+    citations: mergedCitations.length > 0 ? mergedCitations : undefined,
   }));
 
+  console.log(`[Merger] Coverage citations: ${mergedCitations.length}`);
   return merged;
 }
 

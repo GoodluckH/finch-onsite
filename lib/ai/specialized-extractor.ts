@@ -26,18 +26,28 @@ export type ChunkExtraction = {
   coverage: Coverage;
 };
 
+type TurnInfo = {
+  turnId: number;
+  speaker: number;
+  content: string;
+};
+
 /**
  * Extract all sections from a chunk using parallel specialized LLM calls
  */
 export async function extractFromChunkParallel(
   chunkText: string,
   chunkNumber: number,
-  totalChunks: number
+  totalChunks: number,
+  turns: TurnInfo[] = [] // Turn info for citation tracking
 ): Promise<ChunkExtraction> {
   console.log(
     `\n[Specialized Extractor] Processing chunk ${chunkNumber}/${totalChunks} with 4 parallel extractions...`
   );
   console.log(`[Specialized Extractor] Chunk length: ${chunkText.length} characters`);
+  if (turns.length > 0) {
+    console.log(`[Specialized Extractor] Turns in chunk: ${turns.slice(0, 10).map(t => t.turnId).join(", ")}${turns.length > 10 ? "..." : ""} (${turns.length} total)`);
+  }
 
   try {
     // Run all 4 extractions in parallel
@@ -52,12 +62,13 @@ export async function extractFromChunkParallel(
             "client basic information",
             chunkText,
             chunkNumber,
-            totalChunks
+            totalChunks,
+            turns
           ),
           temperature: AI_CONFIG.TEMPERATURE,
         }).then((result) => {
           console.log(
-            `  ✓ [Client Info] Case type: ${result.object.caseType}, Client: ${result.object.clientName || "N/A"}`
+            `  ✓ [Client Info] Case type: ${result.object.caseType}, Client: ${result.object.clientName || "N/A"}, Citations: ${result.object.citations?.length || 0}`
           );
           return result;
         }),
@@ -71,12 +82,13 @@ export async function extractFromChunkParallel(
             "liability information",
             chunkText,
             chunkNumber,
-            totalChunks
+            totalChunks,
+            turns
           ),
           temperature: AI_CONFIG.TEMPERATURE,
         }).then((result) => {
           console.log(
-            `  ✓ [Liability] At-fault: ${result.object.atFault}, Rationale length: ${result.object.rationale.length} chars, Police report: ${result.object.hasPoliceReport}`
+            `  ✓ [Liability] At-fault: ${result.object.atFault}, Rationale length: ${result.object.rationale.length} chars, Citations: ${result.object.citations?.length || 0}`
           );
           return result;
         }),
@@ -90,12 +102,13 @@ export async function extractFromChunkParallel(
             "damages information",
             chunkText,
             chunkNumber,
-            totalChunks
+            totalChunks,
+            turns
           ),
           temperature: AI_CONFIG.TEMPERATURE,
         }).then((result) => {
           console.log(
-            `  ✓ [Damages] Severity: ${result.object.severity}, Indications: ${result.object.indications.length}`
+            `  ✓ [Damages] Severity: ${result.object.severity}, Indications: ${result.object.indications.length}, Citations: ${result.object.citations?.length || 0}`
           );
           return result;
         }),
@@ -109,12 +122,13 @@ export async function extractFromChunkParallel(
             "insurance coverage information",
             chunkText,
             chunkNumber,
-            totalChunks
+            totalChunks,
+            turns
           ),
           temperature: AI_CONFIG.TEMPERATURE,
         }).then((result) => {
           console.log(
-            `  ✓ [Coverage] Client insurance: ${result.object.clientHasInsurance === null ? "unknown" : result.object.clientHasInsurance}, Other party: ${result.object.otherPartyHasInsurance === null ? "unknown" : result.object.otherPartyHasInsurance}`
+            `  ✓ [Coverage] Client insurance: ${result.object.clientHasInsurance === null ? "unknown" : result.object.clientHasInsurance}, Other party: ${result.object.otherPartyHasInsurance === null ? "unknown" : result.object.otherPartyHasInsurance}, Citations: ${result.object.citations?.length || 0}`
           );
           return result;
         }),

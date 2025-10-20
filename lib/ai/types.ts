@@ -5,6 +5,19 @@ export type Transcript = {
   }>;
 };
 
+export type TranscriptSegmentWithTurnId = {
+  turnId: number;
+  turnIndex: number;
+  speaker: number;
+  content: string;
+};
+
+export type ChunkWithTurnIds = {
+  text: string;
+  turnIds: number[]; // Turn IDs contained in this chunk
+  segmentIndices: number[]; // Original segment indices for reference
+};
+
 export type ExtractedData = {
   caseType: string;
   clientName?: string | null;
