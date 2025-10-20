@@ -47,7 +47,7 @@ The system must track changes to support auditing of manual overwrites versus AI
 ## Data Models
 
 ### 1. Matter Table
-Represents a legal case or matter being handled by the law firm.
+Represents a legal case or matter being handled by the law firm, including client biographical information.
 
 **Table Name**: `matters`
 
@@ -55,6 +55,13 @@ Represents a legal case or matter being handled by the law firm.
 |--------|------|-------------|-------------|
 | id | INTEGER | PRIMARY KEY, AUTO INCREMENT | Unique identifier for the matter |
 | name | TEXT | NOT NULL | Name/title of the legal matter |
+| client_name | TEXT | NULL | Full name of the client (may be missing from transcript) |
+| client_dob | TEXT | NULL | Client's date of birth in ISO format (may be missing from transcript) |
+| client_phone | TEXT | NULL | Client's phone number (may be missing from transcript) |
+| client_email | TEXT | NULL | Client's email address (may be missing from transcript) |
+| client_address | TEXT | NULL | Client's physical address (may be missing from transcript) |
+| incident_date | TEXT | NULL | Date of the incident in ISO format (may be missing from transcript) |
+| incident_location | TEXT | NULL | Location where the incident occurred (may be missing from transcript) |
 | created_at | INTEGER | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Unix timestamp of when the matter was created |
 | updated_at | INTEGER | NOT NULL, DEFAULT CURRENT_TIMESTAMP | Unix timestamp of last update |
 | intake_form_data_id | INTEGER | FOREIGN KEY → intake_form_data(id), UNIQUE | Links to the associated intake form data |
@@ -62,7 +69,9 @@ Represents a legal case or matter being handled by the law firm.
 **Notes**:
 - One-to-one relationship with `intake_form_data`
 - Timestamps stored as Unix epoch integers (SQLite standard)
-- The name field could represent case title, client name, or case number
+- Client biographical fields are nullable to support incomplete transcript data
+- UI should clearly indicate which fields are missing or incomplete
+- Date fields stored as TEXT in ISO 8601 format (YYYY-MM-DD) for simplicity
 
 ### 2. Intake Form Data Table
 Stores the structured intake form responses for each matter.
@@ -75,11 +84,13 @@ Stores the structured intake form responses for each matter.
 | case_type | TEXT | NOT NULL | Type of legal case (ENUM) |
 | liability | TEXT | NOT NULL | JSON object storing liability information |
 | damages | TEXT | NOT NULL | JSON object storing damages information |
+| coverage | TEXT | NOT NULL | JSON object storing insurance coverage information |
 
 **Notes**:
 - SQLite doesn't have native ENUM or JSONB types, so we use TEXT with validation
 - `case_type` will be validated at the application layer to enforce enum values
-- `liability` and `damages` will store JSON strings (parsed/validated by Zod at runtime)
+- `liability`, `damages`, and `coverage` will store JSON strings (parsed/validated by Zod at runtime)
+- All JSON fields support nullable/optional subfields to handle incomplete transcript data
 
 ### 3. Case Type Enum
 **Possible Values**:
@@ -146,6 +157,40 @@ type Indication = {
   evidence?: Evidence[];                 // Optional - Array of evidence items
 }
 ```
+
+#### Coverage Field (JSONB-like)
+Stores insurance coverage information for all parties involved in the matter.
+
+**Structure**:
+```typescript
+{
+  clientHasInsurance: boolean | null;           // Client's insurance status (null if unknown from transcript)
+  clientInsuranceProvider?: string;             // Client's insurance company name
+  clientPolicyNumber?: string;                  // Client's policy number
+  clientCoverageDetails?: string;               // Additional client coverage details (text)
+
+  otherPartyHasInsurance: boolean | null;       // Other party's insurance status (null if unknown)
+  otherPartyInsuranceProvider?: string;         // Other party's insurance company name
+  otherPartyPolicyNumber?: string;              // Other party's policy number
+  otherPartyCoverageDetails?: string;           // Additional other party coverage details (text)
+
+  medicalCoverageAvailable: boolean | null;     // Whether medical coverage (PIP, MedPay) is available
+  medicalCoverageDetails?: string;              // Medical coverage details
+
+  underinsuredMotoristCoverage: boolean | null; // UM/UIM coverage available (relevant for MVA cases)
+  policyLimits?: string;                        // Known policy limits (e.g., "100/300", "25/50")
+
+  notes?: string;                               // Additional coverage notes or special circumstances
+}
+```
+
+**Coverage Field Notes**:
+- Uses nullable booleans (`boolean | null`) to distinguish between "no" (false), "yes" (true), and "unknown/not mentioned in transcript" (null)
+- All detail fields are optional since transcript may not contain complete information
+- UI should visually distinguish between "No" and "Unknown/Not mentioned"
+- Policy limits stored as string to support various formats
+- Comprehensive enough to capture common personal injury insurance scenarios
+- `notes` field for edge cases or additional context from transcript
 
 ## Relationships
 
@@ -222,7 +267,12 @@ matters (1) ←→ (1) intake_form_data
   - Save functionality with loading state
 
 ### Frontend Layer - Pending Enhancements ⏳
-- [ ] Markdown rendering for liability content field (currently plain textarea)
+- [x] Markdown rendering for liability content field with edit/preview toggle
+- [x] Unsaved changes tracking with visual indicator and navigation warnings
+- [ ] Client biographical information section on matter detail page
+- [ ] Coverage section in intake form editor
+- [ ] Visual indicators for missing/incomplete fields (e.g., grayed out, "Not mentioned in transcript" label)
+- [ ] Nullable field handling in UI (three-state: Yes/No/Unknown)
 - [ ] Transcript upload UI and flow
 - [ ] AI processing indicator/status
 - [ ] Change tracking and audit trail visualization
@@ -238,6 +288,35 @@ matters (1) ←→ (1) intake_form_data
 - **Professional Colors**: Neutral grays, subtle borders, minimal decoration
 - **Efficient Navigation**: Inline forms, quick actions, minimal clicks
 - **Data Density**: Card grids, compact forms, efficient use of space
+
+### Handling Missing/Incomplete Data
+When data is missing from transcripts or manual entry:
+
+**Visual Indicators**:
+- Empty required fields: Red border or asterisk
+- Empty optional fields: Normal styling but with placeholder "Not provided"
+- Unknown boolean values (null): Three-state controls (Yes/No/Unknown)
+- Missing sections: Collapsed or grayed out with "Complete this section" prompt
+
+**Three-State Boolean Controls**:
+For fields like `clientHasInsurance` that can be true/false/null:
+- Radio group or segmented control: "Yes" | "No" | "Unknown"
+- Default to "Unknown" (null) when data is missing from transcript
+- Visually distinguish "No insurance" from "Insurance status unknown"
+
+**Field-Level Indicators**:
+- Badge showing data source: "From transcript" | "Manually entered" | "Missing"
+- Timestamp: "Last updated 2 hours ago"
+- Icon or color coding for completeness
+
+**Form Validation**:
+- Don't block saving on optional fields
+- Warn (don't error) when saving with many null/missing fields
+- Summary panel showing "X of Y fields completed"
+
+**Workflow Prompts**:
+- "Some information is missing. Would you like to contact the client for details?"
+- "This field was not mentioned in the transcript. Add manually?"
 
 ### Component Sizing Standards
 - **Headers**: text-lg to text-2xl (not too large)
@@ -268,11 +347,20 @@ type Evidence = { id?, type?, description?, url? }
 type Liability = { content, hasPoliceReport, evidence? }
 type Indication = { description, severity, evidence? }
 type Damages = { severity, indications }
-type IntakeFormData = { id, caseType, liability, damages }
-type Matter = { id, name, createdAt, updatedAt, intakeFormDataId }
+type Coverage = {
+  clientHasInsurance, clientInsuranceProvider?, clientPolicyNumber?, clientCoverageDetails?,
+  otherPartyHasInsurance, otherPartyInsuranceProvider?, otherPartyPolicyNumber?, otherPartyCoverageDetails?,
+  medicalCoverageAvailable, medicalCoverageDetails?,
+  underinsuredMotoristCoverage, policyLimits?, notes?
+}
+type IntakeFormData = { id, caseType, liability, damages, coverage }
+type Matter = {
+  id, name, clientName?, clientDob?, clientPhone?, clientEmail?, clientAddress?,
+  incidentDate?, incidentLocation?, createdAt, updatedAt, intakeFormDataId
+}
 type MatterWithIntakeForm = Matter & { intakeFormData }
 type CreateIntakeFormData = Omit<IntakeFormData, 'id'>
-type CreateMatter = { name, intakeFormData }
+type CreateMatter = { name, intakeFormData, clientName?, clientDob?, ... }
 ```
 
 ### Zod Validation Schemas (`db/validation.ts`)
@@ -283,14 +371,17 @@ Runtime validation for data integrity:
 - `LiabilitySchema` - Validates liability structure
 - `IndicationSchema` - Validates indication objects
 - `DamagesSchema` - Validates damages structure
+- `CoverageSchema` - Validates insurance coverage structure (with nullable fields)
 - `IntakeFormDataSchema` - Complete intake form validation
-- `MatterCreateSchema` - Matter creation validation
+- `MatterCreateSchema` - Matter creation validation (with optional client fields)
+- `MatterUpdateSchema` - Matter update validation for client biographical data
 
 ### Drizzle Schema (`db/schema.ts`)
 Database schema with ORM mappings:
 - Tables: `users`, `intakeFormData`, `matters`
-- JSON mode enabled for liability and damages fields
-- Timestamp mode enabled for date fields
+- JSON mode enabled for liability, damages, and coverage fields
+- Timestamp mode enabled for created_at/updated_at fields
+- Text fields for client biographical data and incident details (nullable)
 - Relations configured for type-safe queries
 - Foreign key constraints with unique index
 
@@ -415,16 +506,24 @@ CREATE TABLE field_changes (
 
 **AI Prompt Design**:
 - Extract case type (dog_bites, mva, slip_and_fall)
+- Extract client biographical information (name, DOB, contact info)
+- Extract incident details (date, location)
 - Extract liability information as markdown bulleted lists
 - Identify if police report was mentioned
 - Extract damage severity and specific indications
-- Structure output as JSON matching IntakeFormData schema
+- Extract insurance coverage information for all parties
+- Distinguish between "not mentioned" (null) and "explicitly stated as no" (false)
+- Flag fields with low confidence or ambiguity
+- Structure output as JSON matching IntakeFormData + Matter schema
 
 **Error Handling**:
-- Handle ambiguous or missing information
+- Handle ambiguous or missing information gracefully
+- Use null for missing data, not empty strings
 - Flag low-confidence extractions for manual review
-- Support partial extraction (some fields populated, others empty)
+- Support partial extraction (some fields populated, others null)
 - Allow re-processing with different AI models/prompts
+- Confidence scores per field (high/medium/low)
+- Generate "Extraction Summary" showing what was/wasn't found in transcript
 
 ## Future Considerations
 - **Markdown editing**: Rich text editor with markdown preview for liability content
